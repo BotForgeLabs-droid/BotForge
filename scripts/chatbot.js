@@ -1,62 +1,89 @@
-// Interactive Chatbot Demo functionality
+constructor(containerId) {
+    this.container = document.getElementById(containerId);
+    this.messagesContainer = document.getElementById('chatbotMessages');
+    this.input = document.getElementById('chatbotInput');
+    this.sendButton = document.getElementById('chatbotSend');
+    this.quickReplies = document.getElementById('quickReplies');
 
-class ChatbotDemo {
-    constructor(containerId) {
-        this.container = document.getElementById(containerId);
-        this.messagesContainer = document.getElementById('chatbotMessages');
-        this.input = document.getElementById('chatbotInput');
-        this.sendButton = document.getElementById('chatbotSend');
-        this.quickReplies = document.getElementById('quickReplies');
-        
+    this.responses = {};
+    this.fallbackResponses = [];
+
+    this.quickReplySuggestions = {
+        'default': ['Tell me about Pricing', 'Book a Demo', 'What services do you offer?'],
+        'services': ['Tell me about Pricing', 'Book a Demo', 'How does it work?'],
+        'pricing': ['Book a Demo', 'What industries do you serve?', 'Is it easy to setup?'],
+        'demo': ['Tell me about Pricing', 'How does it work?', 'What services do you offer?'],
+        'work': ['Is it easy to setup?', 'Book a Demo', 'Tell me about Pricing'],
+        'industries': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo'],
+        'setup': ['Book a Demo', 'Tell me about Pricing', 'What services do you offer?'],
+        'support': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo']
+    };
+
+    this.init();
+}
+
+async loadFAQData() {
+    try {
+        const response = await fetch('./data/faq.json');
+
+        if (!response.ok) {
+            throw new Error('Failed to load FAQ file');
+        }
+
+        const data = await response.json();
+
+        this.validateFAQSchema(data);
+
+        this.responses = data.responses;
+        this.fallbackResponses = data.fallbackResponses;
+
+        console.log('FAQ loaded successfully');
+    } catch (error) {
+        console.error('FAQ loading failed:', error);
+
         this.responses = {
-            'What services do you offer?': 'We offer AI-powered chatbots that can handle customer support, lead generation, appointment booking, and more! Our chatbots work 24/7 to help grow your business.',
-            'How much does it cost?': 'Our plans start at just ₹799/month for small businesses. We also offer Pro (₹1999/month) and Enterprise (₹2999/month) plans. All include a free trial!',
-            'Can I get a demo?': 'Absolutely! You\'re already experiencing our demo right now! 😊 For a personalized demo of how our chatbot would work for YOUR business, just fill out our contact form below.',
-            'How does it work?': 'It\'s simple! 1) Tell us about your business 2) We build a custom AI chatbot 3) You launch and start seeing results. Most clients are up and running within 48 hours!',
-            'What industries do you serve?': 'We work with restaurants, fitness centers, retail stores, healthcare practices, real estate agencies, and many more! Our AI adapts to any industry.',
-            'Is it easy to setup?': 'Yes! Setup takes just minutes with our plug-and-play integration. No technical skills required - we handle everything for you.',
-            'pricing': 'Our pricing is designed to fit businesses of all sizes! Starter (₹799/mo), Pro (₹1999/mo), and Enterprise (₹2999/mo). All plans include 24/7 support and a money-back guarantee.',
-            'demo': 'You\'re chatting with our AI right now! Pretty cool, right? 🚀 This is just a taste of what our chatbots can do for your business.',
-            'hello': 'Hello there! 👋 Welcome to BotBazzar! I\'m here to show you how our AI chatbots can transform your business. What would you like to know?',
-            'hi': 'Hi! Great to meet you! I\'m your AI assistant demo. I can tell you all about our chatbot solutions. What\'s your biggest customer service challenge?',
-            'help': 'I\'m here to help! You can ask me about:\n• Our services and features\n• Pricing and plans\n• How our chatbots work\n• Getting a personalized demo\n\nWhat interests you most?',
-            'support': 'Our AI chatbots provide 24/7 customer support, answering FAQs, booking appointments, and more. They\'re like having a full support team without the overhead!',
-            'contact':' You can reach our human team anytime by clicking the "Get Free Demo" button above or the "Get Started" button. We\'d love to chat about how we can help your business!',
+            hello: 'Hello! How can I help you today?'
         };
-        
-        this.fallbackResponses = [
-            'That\'s a great question! Our AI chatbots can definitely help with that. Would you like to schedule a personalized demo to discuss your specific needs?',
-            'I\'d love to tell you more about that! Our team specializes in creating custom solutions. Click "Get Free Demo" above to speak with a human expert!',
-            'Interesting! Our AI learns from conversations like this to better serve your customers. Want to see how this could work for your business?',
-            'Great point! That\'s exactly the kind of thing our chatbots excel at. Ready to see how we can help your specific business? Let\'s chat!'
-        ];
 
-        this.quickReplySuggestions = {
-            'default': ['Tell me about Pricing', 'Book a Demo', 'What services do you offer?'],
-            'services': ['Tell me about Pricing', 'Book a Demo', 'How does it work?'],
-            'pricing': ['Book a Demo', 'What industries do you serve?', 'Is it easy to setup?'],
-            'demo': ['Tell me about Pricing', 'How does it work?', 'What services do you offer?'],
-            'work': ['Is it easy to setup?', 'Book a Demo', 'Tell me about Pricing'],
-            'industries': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo'],
-            'setup': ['Book a Demo', 'Tell me about Pricing', 'What services do you offer?'],
-            'support': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo']
-        };
-        
-        this.init();
+        this.fallbackResponses = [
+            'Sorry, chatbot knowledge base is currently unavailable.'
+        ];
     }
-    
-    init() {
-        if (!this.container) return;
-        
-        this.bindEvents();
-        this.showTypingIndicator();
-        
-        setTimeout(() => {
-            this.hideTypingIndicator();
-            this.addMessage('bot', 'Hello! I\'m your AI assistant. How can I help you today?');
-            this.renderQuickReplies(this.quickReplySuggestions['default']);
-        }, 1500);
+}
+
+validateFAQSchema(data) {
+    if (!data || typeof data !== 'object') {
+        throw new Error('Invalid FAQ data');
     }
+
+    if (!data.responses || typeof data.responses !== 'object') {
+        throw new Error('Missing responses');
+    }
+
+    if (!Array.isArray(data.fallbackResponses)) {
+        throw new Error('Missing fallbackResponses');
+    }
+
+    return true;
+}
+
+async init() {
+    if (!this.container) return;
+
+    await this.loadFAQData();
+
+    this.bindEvents();
+    this.showTypingIndicator();
+
+    setTimeout(() => {
+        this.hideTypingIndicator();
+        this.addMessage(
+            'bot',
+            'Hello! I\'m your AI assistant. How can I help you today?'
+        );
+        this.renderQuickReplies(this.quickReplySuggestions['default']);
+    }, 1500);
+}
     
     bindEvents() {
         // Send button click
@@ -366,4 +393,4 @@ style.textContent = `
     }
 }
 `;
-document.head.appendChild(style);
+document.head.appendChild(style);
