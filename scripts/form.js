@@ -1,5 +1,4 @@
 // Contact Form functionality with validation and submission
-
 class ContactForm {
     constructor(formId) {
         this.form = document.getElementById(formId);
