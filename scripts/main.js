@@ -230,20 +230,42 @@ function initMobileMenu() {
     const toggle = document.getElementById('mobileMenuToggle');
     const navLinks = document.querySelector('.nav-links');
     
-    if (toggle && navLinks) {
-        toggle.addEventListener('click', function() {
-            this.classList.toggle('active');
-            navLinks.classList.toggle('mobile-active');
-        });
-        
-        // Close menu when clicking on a link
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', () => {
-                toggle.classList.remove('active');
-                navLinks.classList.remove('mobile-active');
-            });
-        });
+    if (!toggle || !navLinks) return;
+
+    // Accessibility defaults
+    if (!toggle.hasAttribute('aria-expanded')) {
+        toggle.setAttribute('aria-expanded', 'false');
     }
+    if (!toggle.hasAttribute('aria-controls')) {
+        toggle.setAttribute('aria-controls', 'primary-nav-links');
+    }
+    if (!navLinks.id) {
+        navLinks.id = 'primary-nav-links';
+    }
+
+    const setOpen = (open) => {
+        toggle.classList.toggle('active', open);
+        navLinks.classList.toggle('mobile-active', open);
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        document.body.style.overflow = open ? 'hidden' : '';
+    };
+
+    toggle.addEventListener('click', function () {
+        setOpen(!navLinks.classList.contains('mobile-active'));
+    });
+
+    // Close menu when selecting any in-menu link (section anchors + CTA)
+    navLinks.querySelectorAll('a').forEach((link) => {
+        link.addEventListener('click', () => setOpen(false));
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && navLinks.classList.contains('mobile-active')) {
+            setOpen(false);
+            toggle.focus();
+        }
+    });
 }
 
 // Initialize scroll animations
