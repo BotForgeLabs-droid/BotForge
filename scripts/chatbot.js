@@ -76,7 +76,7 @@ class ChatbotDemo {
             'Is it easy to setup?': 'Yes! Setup takes just minutes with our plug-and-play integration. No technical skills required - we handle everything for you.',
             'pricing': 'Our pricing is designed to fit businesses of all sizes! Starter (₹799/mo), Pro (₹1999/mo), and Enterprise (₹2999/mo). All plans include 24/7 support and a money-back guarantee.',
             'demo': 'You\'re chatting with our AI right now! Pretty cool, right? 🚀 This is just a taste of what our chatbots can do for your business.',
-            'hello': 'Hello there! 👋 Welcome to BotBazzar! I\'m here to show you how our AI chatbots can transform your business. What would you like to know?',
+            'hello': 'Hello there! 👋 Welcome to BotForge! I\'m here to show you how our AI chatbots can transform your business. What would you like to know?',
             'hi': 'Hi! Great to meet you! I\'m your AI assistant demo. I can tell you all about our chatbot solutions. What\'s your biggest customer service challenge?',
             'help': 'I\'m here to help! You can ask me about:\n• Our services and features\n• Pricing and plans\n• How our chatbots work\n• Getting a personalized demo\n\nWhat interests you most?',
             'support': 'Our AI chatbots provide 24/7 customer support, answering FAQs, booking appointments, and more. They\'re like having a full support team without the overhead!',

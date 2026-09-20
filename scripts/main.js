@@ -358,7 +358,7 @@ function initFooterModals() {
             icon: 'users',
             content: `
                 <h4>Empowering Businesses with AI</h4>
-                <p>BotBazzar was founded in 2020 with a simple mission: make powerful AI technology accessible to businesses of all sizes.</p>
+                <p>BotForge was founded in 2020 with a simple mission: make powerful AI technology accessible to businesses of all sizes.</p>
                 <p>Our team of AI researchers, developers, and customer success specialists work tirelessly to create chatbot solutions that truly understand your customers and help your business grow.</p>
                 <div class="stats-row">
                     <div class="stat-box">
@@ -409,7 +409,7 @@ function initFooterModals() {
                     <li>Professional development budget</li>
                     <li>Remote-first culture</li>
                 </ul>
-                <p class="modal-note">Email your resume to careers@botbazzar.com</p>
+                <p class="modal-note">Email your resume to careers@botforge.com</p>
             `
         },
         blog: {
@@ -444,19 +444,19 @@ function initFooterModals() {
                 <h4>Press & Media</h4>
                 <p>For press inquiries, interviews, or media requests, please contact our press team:</p>
                 <div class="press-contact">
-                    <p><strong>Email:</strong> press@Botbazzar.com</p>
+                    <p><strong>Email:</strong> press@botforge.com</p>
                     <p><strong>Phone:</strong> +91 8808812127</p>
                 </div>
                 <h4>Recent Press Coverage</h4>
                 <div class="press-mentions">
                     <div class="press-item">
-                        <strong>TechCrunch:</strong> "BotBazzar raises $2M Series B to expand AI capabilities"
+                        <strong>TechCrunch:</strong> "BotForge raises $2M Series B to expand AI capabilities"
                     </div>
                     <div class="press-item">
                         <strong>Forbes:</strong> "Top 50 AI Startups to Watch in 2025"
                     </div>
                     <div class="press-item">
-                        <strong>VentureBeat:</strong> "How BotBazzar is democratizing enterprise-level AI"
+                        <strong>VentureBeat:</strong> "How BotForge is democratizing enterprise-level AI"
                     </div>
                 </div>
                 <h4>Brand Assets</h4>
@@ -532,7 +532,7 @@ function initFooterModals() {
                         <p>Natural Language Processing, sentiment analysis, and custom integrations.</p>
                     </div>
                 </div>
-                <p class="modal-note">Full documentation available at docs.BotBazzar.com</p>
+                <p class="modal-note">Full documentation available at docs.botforge.com</p>
             `
         },
         status: {
@@ -574,7 +574,7 @@ function initFooterModals() {
                         <strong>January 5, 2025</strong> - API v2.0 released with improved performance
                     </div>
                 </div>
-                <p class="modal-note">For status updates hit us a email at status.BotBazzar@gmail.com</p>
+                <p class="modal-note">For status updates hit us a email at status.botforge@gmail.com</p>
             `
         },
         privacy: {
@@ -583,7 +583,7 @@ function initFooterModals() {
             content: `
                 <h4>Privacy Policy</h4>
                 <p><strong>Last Updated: January 1, 2025</strong></p>
-                <p>At BotBazzar, we take your privacy seriously. This policy outlines how we collect, use, and protect your information.</p>
+                <p>At BotForge, we take your privacy seriously. This policy outlines how we collect, use, and protect your information.</p>
 
                 <h5>Information We Collect</h5>
                 <p>We collect information you provide directly to us, such as when you create an account, use our services, or contact support. This may include your name, email address, business information, and usage data.</p>
@@ -601,9 +601,9 @@ function initFooterModals() {
                 <p>We implement industry-standard security measures to protect your data, including encryption, secure servers, and regular security audits.</p>
 
                 <h5>Your Rights</h5>
-                <p>You have the right to access, update, or delete your personal information at any time. Contact us at privacyatBotBazzar@gmail.com for data requests.</p>
+                <p>You have the right to access, update, or delete your personal information at any time. Contact us at privacy@botforge.com for data requests.</p>
 
-                <p class="modal-note">To read our full privacy policy hit us a email at privacypolicyatBB@gmail.com</p>
+                <p class="modal-note">To read our full privacy policy hit us a email at privacypolicy@botforge.com</p>
             `
         },
         terms: {
@@ -612,7 +612,7 @@ function initFooterModals() {
             content: `
                 <h4>Terms of Service</h4>
                 <p><strong>Last Updated: January 1, 2025</strong></p>
-                <p>By accessing or using BotBazzar's services, you agree to be bound by these Terms of Service.</p>
+                <p>By accessing or using BotForge's services, you agree to be bound by these Terms of Service.</p>
 
                 <h5>Service Usage</h5>
                 <p>You may use our services only as permitted by law. You agree not to misuse our services or help anyone else do so.</p>
@@ -634,7 +634,7 @@ function initFooterModals() {
                 <h5>Limitation of Liability</h5>
                 <p>Our liability is limited to the amount you paid us in the 12 months prior to the event giving rise to liability.</p>
 
-                <p class="modal-note">Read our full terms at chatbotai.com/terms</p>
+                <p class="modal-note">Read our full terms at botforge.com/terms</p>
             `
         }
     };
