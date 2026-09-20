@@ -30,6 +30,17 @@ class ChatbotDemo {
             'Interesting! Our AI learns from conversations like this to better serve your customers. Want to see how this could work for your business?',
             'Great point! That\'s exactly the kind of thing our chatbots excel at. Ready to see how we can help your specific business? Let\'s chat!'
         ];
+
+        this.quickReplySuggestions = {
+            'default': ['Tell me about Pricing', 'Book a Demo', 'What services do you offer?'],
+            'services': ['Tell me about Pricing', 'Book a Demo', 'How does it work?'],
+            'pricing': ['Book a Demo', 'What industries do you serve?', 'Is it easy to setup?'],
+            'demo': ['Tell me about Pricing', 'How does it work?', 'What services do you offer?'],
+            'work': ['Is it easy to setup?', 'Book a Demo', 'Tell me about Pricing'],
+            'industries': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo'],
+            'setup': ['Book a Demo', 'Tell me about Pricing', 'What services do you offer?'],
+            'support': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo']
+        };
         
         this.init();
     }
@@ -43,6 +54,7 @@ class ChatbotDemo {
         setTimeout(() => {
             this.hideTypingIndicator();
             this.addMessage('bot', 'Hello! I\'m your AI assistant. How can I help you today?');
+            this.renderQuickReplies(this.quickReplySuggestions['default']);
         }, 1500);
     }
     
@@ -70,9 +82,11 @@ class ChatbotDemo {
         // Quick reply buttons
         if (this.quickReplies) {
             this.quickReplies.addEventListener('click', (e) => {
-                if (e.target.classList.contains('quick-reply')) {
-                    const message = e.target.getAttribute('data-message');
-                    this.sendMessage(message);
+                const button = e.target.closest('.quick-reply');
+                if (button && !button.disabled) {
+                    const message = button.getAttribute('data-message') || button.textContent;
+                    this.input.value = message;
+                    this.handleSendMessage();
                 }
             });
         }
@@ -91,10 +105,8 @@ class ChatbotDemo {
         // Add user message
         this.addMessage('user', message);
         
-        // Hide quick replies after first message
-        if (this.quickReplies) {
-            this.quickReplies.style.display = 'none';
-        }
+        // Disable quick replies while processing
+        this.disableQuickReplies();
         
         // Show typing indicator
         this.showTypingIndicator();
@@ -109,6 +121,7 @@ class ChatbotDemo {
     generateResponse(userMessage) {
         const lowerMessage = userMessage.toLowerCase();
         let response = null;
+        let topic = 'default';
         
         // Check for exact matches first
         for (const [key, value] of Object.entries(this.responses)) {
@@ -149,12 +162,53 @@ class ChatbotDemo {
             }
         }
         
+        // Determine context topic for dynamic suggestion chips
+        if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('pricing') || lowerMessage.includes('plan')) {
+            topic = 'pricing';
+        } else if (lowerMessage.includes('demo')) {
+            topic = 'demo';
+        } else if (lowerMessage.includes('service') || lowerMessage.includes('feature')) {
+            topic = 'services';
+        } else if (lowerMessage.includes('work')) {
+            topic = 'work';
+        } else if (lowerMessage.includes('setup') || lowerMessage.includes('install')) {
+            topic = 'setup';
+        } else if (lowerMessage.includes('industry') || lowerMessage.includes('business')) {
+            topic = 'industries';
+        } else if (lowerMessage.includes('support') || lowerMessage.includes('help') || lowerMessage.includes('contact')) {
+            topic = 'support';
+        }
+        
         // Use fallback response if no match found
         if (!response) {
             response = this.fallbackResponses[Math.floor(Math.random() * this.fallbackResponses.length)];
         }
         
         this.addMessage('bot', response);
+        const suggestions = this.quickReplySuggestions[topic] || this.quickReplySuggestions['default'];
+        this.renderQuickReplies(suggestions);
+    }
+    
+    renderQuickReplies(chips) {
+        if (!this.quickReplies) return;
+        this.quickReplies.innerHTML = '';
+        this.quickReplies.style.display = 'flex';
+        
+        chips.forEach(chipText => {
+            const button = document.createElement('button');
+            button.className = 'quick-reply';
+            button.setAttribute('data-message', chipText);
+            button.textContent = chipText;
+            this.quickReplies.appendChild(button);
+        });
+    }
+
+    disableQuickReplies() {
+        if (!this.quickReplies) return;
+        const buttons = this.quickReplies.querySelectorAll('.quick-reply');
+        buttons.forEach(btn => {
+            btn.disabled = true;
+        });
     }
     
     addMessage(sender, text) {
@@ -206,6 +260,8 @@ class ChatbotDemo {
     }
     
     showTypingIndicator() {
+        this.disableQuickReplies();
+        
         const existingIndicator = document.querySelector('.typing-message');
         if (existingIndicator) return;
         
@@ -251,7 +307,7 @@ document.addEventListener('DOMContentLoaded', function() {
     new ChatbotDemo('chatbotWindow');
 });
 
-// Add CSS for message animations
+// Add CSS for message animations and disabled quick reply states
 const style = document.createElement('style');
 style.textContent = `
 .message-enter {
@@ -265,6 +321,13 @@ style.textContent = `
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+.quick-reply:disabled,
+.quick-reply[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 .typing-indicator {
@@ -303,4 +366,4 @@ style.textContent = `
     }
 }
 `;
-document.head.appendChild(style);
+document.head.appendChild(style);
