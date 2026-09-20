@@ -1,5 +1,83 @@
 // Interactive Chatbot Demo functionality
 
+class RateLimiter {
+    constructor(limit = 5, windowMs = 10000) {
+        this.limit = limit;
+        this.windowMs = windowMs;
+        this.timestamps = [];
+    }
+
+    isAllowed() {
+        const now = Date.now();
+        this.timestamps = this.timestamps.filter(ts => now - ts < this.windowMs);
+
+        if (this.timestamps.length < this.limit) {
+            this.timestamps.push(now);
+            return { allowed: true, remaining: this.limit - this.timestamps.length, retryAfterMs: 0 };
+        }
+
+        const oldest = this.timestamps[0];
+        const retryAfterMs = Math.max(0, this.windowMs - (now - oldest));
+        return { allowed: false, remaining: 0, retryAfterMs };
+    }
+}
+
+class ChatStateManager {
+    static STORAGE_KEY = 'botforge_chat_session';
+    static EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+    static saveSession(messages, topic = 'default') {
+        try {
+            const data = {
+                timestamp: Date.now(),
+                messages: messages,
+                topic: topic
+            };
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+        } catch (error) {
+            console.warn('ChatStateManager: Failed to save session to localStorage (Quota exceeded or storage disabled).', error);
+        }
+    }
+
+    static loadSession() {
+        try {
+            const dataStr = localStorage.getItem(this.STORAGE_KEY);
+            if (!dataStr) return null;
+
+            const sessionData = JSON.parse(dataStr);
+            if (!sessionData || typeof sessionData !== 'object') {
+                this.clearSession();
+                return null;
+            }
+
+            // Check 24-hour expiration
+            if (Date.now() - sessionData.timestamp > this.EXPIRATION_MS) {
+                this.clearSession();
+                return null;
+            }
+
+            if (!Array.isArray(sessionData.messages)) {
+                this.clearSession();
+                return null;
+            }
+
+            return sessionData;
+        } catch (error) {
+            console.warn('ChatStateManager: Corrupted session data detected. Resetting chat state.', error);
+            this.clearSession();
+            return null;
+        }
+    }
+
+    static clearSession() {
+        try {
+            localStorage.removeItem(this.STORAGE_KEY);
+        } catch (error) {
+            console.warn('ChatStateManager: Unable to clear localStorage item.', error);
+        }
+    }
+}
+
 class ChatbotDemo {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
@@ -8,6 +86,13 @@ class ChatbotDemo {
         this.sendButton = document.getElementById('chatbotSend');
         this.quickReplies = document.getElementById('quickReplies');
         
+        this.messages = [];
+        this.activeTopic = 'default';
+
+        // Rate Limiter: Max 5 chat messages in a 10-second window
+        this.rateLimiter = new RateLimiter(5, 10000);
+        this.rateLimitInterval = null;
+
         this.responses = {
             'What services do you offer?': 'We offer AI-powered chatbots that can handle customer support, lead generation, appointment booking, and more! Our chatbots work 24/7 to help grow your business.',
             'How much does it cost?': 'Our plans start at just ₹799/month for small businesses. We also offer Pro (₹1999/month) and Enterprise (₹2999/month) plans. All include a free trial!',
@@ -49,13 +134,32 @@ class ChatbotDemo {
         if (!this.container) return;
         
         this.bindEvents();
-        this.showTypingIndicator();
-        
-        setTimeout(() => {
-            this.hideTypingIndicator();
-            this.addMessage('bot', 'Hello! I\'m your AI assistant. How can I help you today?');
-            this.renderQuickReplies(this.quickReplySuggestions['default']);
-        }, 1500);
+
+        const session = ChatStateManager.loadSession();
+        if (session && session.messages && session.messages.length > 0) {
+            if (this.messagesContainer) {
+                this.messagesContainer.innerHTML = '';
+            }
+            this.activeTopic = session.topic || 'default';
+            this.messages = [];
+            session.messages.forEach(msg => {
+                this.addMessage(msg.sender, msg.text, msg.time, false);
+                this.messages.push(msg);
+            });
+            const suggestions = this.quickReplySuggestions[this.activeTopic] || this.quickReplySuggestions['default'];
+            this.renderQuickReplies(suggestions);
+        } else {
+            if (this.messagesContainer) {
+                this.messagesContainer.innerHTML = '';
+            }
+            this.showTypingIndicator();
+            
+            setTimeout(() => {
+                this.hideTypingIndicator();
+                this.addMessage('bot', 'Hello! I\'m your AI assistant. How can I help you today?');
+                this.renderQuickReplies(this.quickReplySuggestions['default']);
+            }, 1500);
+        }
     }
     
     bindEvents() {
@@ -93,12 +197,53 @@ class ChatbotDemo {
     }
     
     handleSendMessage() {
+        if (this.input.disabled) return;
+
         const message = this.input.value.trim();
-        if (message) {
-            this.sendMessage(message);
-            this.input.value = '';
-            this.input.style.height = 'auto';
+        if (!message) return;
+
+        const rateCheck = this.rateLimiter.isAllowed();
+        if (!rateCheck.allowed) {
+            this.triggerRateLimitLock(rateCheck.retryAfterMs);
+            return;
         }
+
+        this.sendMessage(message);
+        this.input.value = '';
+        this.input.style.height = 'auto';
+    }
+
+    triggerRateLimitLock(retryAfterMs) {
+        if (this.rateLimitInterval) {
+            clearInterval(this.rateLimitInterval);
+        }
+
+        let remainingSeconds = Math.ceil(retryAfterMs / 1000);
+        const originalPlaceholder = 'Type your message...';
+
+        this.input.disabled = true;
+        if (this.sendButton) this.sendButton.disabled = true;
+        this.disableQuickReplies();
+
+        const updateUI = () => {
+            if (remainingSeconds <= 0) {
+                clearInterval(this.rateLimitInterval);
+                this.rateLimitInterval = null;
+                this.input.disabled = false;
+                if (this.sendButton) this.sendButton.disabled = false;
+                this.input.value = '';
+                this.input.placeholder = originalPlaceholder;
+                const suggestions = this.quickReplySuggestions[this.activeTopic] || this.quickReplySuggestions['default'];
+                this.renderQuickReplies(suggestions);
+            } else {
+                this.input.value = '';
+                this.input.placeholder = `Rate limit exceeded! Please wait ${remainingSeconds}s...`;
+                remainingSeconds--;
+            }
+        };
+
+        updateUI();
+        this.rateLimitInterval = setInterval(updateUI, 1000);
     }
     
     sendMessage(message) {
@@ -178,6 +323,8 @@ class ChatbotDemo {
         } else if (lowerMessage.includes('support') || lowerMessage.includes('help') || lowerMessage.includes('contact')) {
             topic = 'support';
         }
+
+        this.activeTopic = topic;
         
         // Use fallback response if no match found
         if (!response) {
@@ -211,7 +358,7 @@ class ChatbotDemo {
         });
     }
     
-    addMessage(sender, text) {
+    addMessage(sender, text, timestampOverride = null, saveToStorage = true) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${sender}-message`;
         
@@ -225,12 +372,14 @@ class ChatbotDemo {
         const messageParagraph = document.createElement('p');
         messageParagraph.textContent = text;
         
-        const timestamp = document.createElement('span');
-        timestamp.className = 'message-time';
-        timestamp.textContent = new Date().toLocaleTimeString([], {
+        const timeText = timestampOverride || new Date().toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit'
         });
+        
+        const timestamp = document.createElement('span');
+        timestamp.className = 'message-time';
+        timestamp.textContent = timeText;
         
         content.appendChild(messageParagraph);
         content.appendChild(timestamp);
@@ -256,6 +405,11 @@ class ChatbotDemo {
             setTimeout(() => {
                 messageDiv.classList.remove('message-enter');
             }, 300);
+        }
+
+        if (saveToStorage) {
+            this.messages.push({ sender, text, time: timeText });
+            ChatStateManager.saveSession(this.messages, this.activeTopic);
         }
     }
     
@@ -307,7 +461,7 @@ document.addEventListener('DOMContentLoaded', function() {
     new ChatbotDemo('chatbotWindow');
 });
 
-// Add CSS for message animations and disabled quick reply states
+// Add CSS for message animations, rate limit input state, and disabled quick reply states
 const style = document.createElement('style');
 style.textContent = `
 .message-enter {
@@ -328,6 +482,13 @@ style.textContent = `
     opacity: 0.5;
     cursor: not-allowed;
     pointer-events: none;
+}
+
+.chatbot-input input:disabled {
+    background-color: var(--light-gray);
+    cursor: not-allowed;
+    color: #e53e3e;
+    font-weight: 500;
 }
 
 .typing-indicator {
@@ -366,4 +527,4 @@ style.textContent = `
     }
 }
 `;
-document.head.appendChild(style);
+document.head.appendChild(style);

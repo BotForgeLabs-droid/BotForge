@@ -6,11 +6,18 @@ class ContactForm {
         this.fields = {};
         this.isSubmitting = false;
         
+        // Rate Limiter: Max 3 form submissions in a 30-second window
+        if (typeof RateLimiter !== 'undefined') {
+            this.rateLimiter = new RateLimiter(3, 30000);
+        } else {
+            this.rateLimiter = null;
+        }
+
         if (this.form) {
             this.init();
         }
     }
-    
+
     init() {
         this.bindFields();
         this.bindEvents();
@@ -137,6 +144,15 @@ async handleSubmit(e) {
     e.preventDefault();
     
     if (this.isSubmitting) return;
+
+    if (this.rateLimiter) {
+        const rateCheck = this.rateLimiter.isAllowed();
+        if (!rateCheck.allowed) {
+            const seconds = Math.ceil(rateCheck.retryAfterMs / 1000);
+            this.showFormError(`Rate limit exceeded! Please wait ${seconds} seconds before submitting again.`);
+            return;
+        }
+    }
     
     if (!this.validateForm()) {
         this.showFormError('Please correct the errors above');
