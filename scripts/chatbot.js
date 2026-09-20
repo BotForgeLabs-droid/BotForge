@@ -41,7 +41,97 @@ class ChatbotDemo {
             'setup': ['Book a Demo', 'Tell me about Pricing', 'What services do you offer?'],
             'support': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo']
         };
-        
+        // ---- Issue #8: intent matching data --------------------------------
+        // Words ignored when scoring (they carry no intent on their own).
+        this.stopWords = new Set([
+            'is', 'the', 'a', 'an', 'are', 'am', 'i', 'you', 'your', 'we', 'our',
+            'do', 'does', 'did', 'what', 'how', 'can', 'could', 'would', 'will',
+            'to', 'of', 'for', 'in', 'on', 'and', 'or', 'it', 'this', 'that',
+            'my', 'me', 'about', 'tell', 'please', 'get', 'have', 'has', 'there',
+            'with', 'be', 'at', 'so', 'if', 'us', 'want', 'need', 'like'
+        ]);
+
+        // Each intent has weighted keywords ([word, weight 0-1], typo-tolerant) and
+        // weighted phrases (whole-word match on the full sentence). `response` is a
+        // key of this.responses and `topic` a key of this.quickReplySuggestions.
+        // Plain data on purpose, so it can move to data/faq.json later (Issue #11).
+        this.intents = {
+            bookDemo: {
+                response: 'Can I get a demo?', topic: 'demo',
+                keywords: [],
+                phrases: [['book a demo', 1], ['get a demo', 1], ['schedule a demo', 1],
+                          ['request a demo', 1], ['free demo', 1]]
+            },
+            demo: {
+                response: 'demo', topic: 'demo',
+                keywords: [['demo', 1], ['trial', 0.8], ['try', 0.6], ['test', 0.5]],
+                phrases: [['show me', 0.6]]
+            },
+            pricing: {
+                response: 'pricing', topic: 'pricing',
+                keywords: [['price', 1], ['pricing', 1], ['cost', 1], ['costs', 1],
+                           ['expensive', 0.8], ['cheap', 0.8], ['affordable', 0.8],
+                           ['fee', 0.7], ['fees', 0.7], ['subscription', 0.7],
+                           ['plan', 0.6], ['plans', 0.6], ['package', 0.6],
+                           ['payment', 0.5], ['money', 0.5]],
+                phrases: [['how much', 1]]
+            },
+            services: {
+                response: 'What services do you offer?', topic: 'services',
+                keywords: [['services', 1], ['service', 1], ['features', 1], ['feature', 1],
+                           ['offer', 0.8], ['capabilities', 0.8], ['provide', 0.5]],
+                phrases: [['what can you do', 0.9]]
+            },
+            work: {
+                response: 'How does it work?', topic: 'work',
+                keywords: [['work', 0.9], ['works', 0.9], ['working', 0.8],
+                           ['process', 0.6], ['explain', 0.5]],
+                phrases: [['how does it work', 1], ['how it works', 1]]
+            },
+            industries: {
+                response: 'What industries do you serve?', topic: 'industries',
+                keywords: [['industry', 1], ['industries', 1], ['sector', 0.8],
+                           ['restaurant', 0.5], ['fitness', 0.5], ['gym', 0.5],
+                           ['retail', 0.5], ['healthcare', 0.5], ['clinic', 0.5],
+                           ['salon', 0.5], ['hotel', 0.5], ['business', 0.3]],
+                phrases: [['real estate', 0.5]]
+            },
+            setup: {
+                response: 'Is it easy to setup?', topic: 'setup',
+                keywords: [['setup', 1], ['install', 1], ['installation', 1],
+                           ['integration', 0.7], ['integrate', 0.7], ['easy', 0.4],
+                           ['technical', 0.4]],
+                phrases: [['set up', 1]]
+            },
+            support: {
+                response: 'support', topic: 'support',
+                keywords: [['support', 0.9], ['assistance', 0.6], ['human', 0.6], ['agent', 0.5]],
+                phrases: []
+            },
+            help: {
+                response: 'help', topic: 'support',
+                keywords: [['help', 0.8]],
+                phrases: []
+            },
+            contact: {
+                response: 'contact', topic: 'support',
+                keywords: [['contact', 0.9], ['email', 0.5], ['phone', 0.5], ['call', 0.5], ['reach', 0.5]],
+                phrases: []
+            },
+            greeting: {
+                response: 'hello', topic: 'default',
+                keywords: [['hello', 1], ['hey', 1], ['greetings', 0.8]],
+                phrases: [['good morning', 1], ['good afternoon', 1], ['good evening', 1]]
+            },
+            hi: {
+                response: 'hi', topic: 'default',
+                keywords: [['hi', 1]],
+                phrases: []
+            }
+        };
+
+        // Add ?debug to the page URL to log matched intents in the console.
+        this.debug = /[?&]debug\b/.test(window.location.search);
         this.init();
     }
     
@@ -117,77 +207,96 @@ class ChatbotDemo {
             this.generateResponse(message);
         }, 1000 + Math.random() * 1000);
     }
-    
-    generateResponse(userMessage) {
-        const lowerMessage = userMessage.toLowerCase();
-        let response = null;
-        let topic = 'default';
-        
-        // Check for exact matches first
-        for (const [key, value] of Object.entries(this.responses)) {
-            if (lowerMessage.includes(key.toLowerCase())) {
-                response = value;
-                break;
-            }
-        }
-        
-        // Check for partial matches
-        if (!response) {
-            const keywords = {
-                'price': this.responses['pricing'],
-                'cost': this.responses['pricing'],
-                'expensive': this.responses['pricing'],
-                'money': this.responses['pricing'],
-                'plan': this.responses['pricing'],
-                'demo': this.responses['demo'],
-                'try': this.responses['demo'],
-                'test': this.responses['demo'],
-                'service': this.responses['What services do you offer?'],
-                'feature': this.responses['What services do you offer?'],
-                'work': this.responses['How does it work?'],
-                'setup': this.responses['Is it easy to setup?'],
-                'install': this.responses['Is it easy to setup?'],
-                'industry': this.responses['What industries do you serve?'],
-                'business': this.responses['What industries do you serve?'],
-                'contact': this.responses['contact'],
-                'support': this.responses['support'],
-                'help': this.responses['help']
-            };
-            
-            for (const [keyword, responseText] of Object.entries(keywords)) {
-                if (lowerMessage.includes(keyword)) {
-                    response = responseText;
-                    break;
+
+        // ---- Issue #8: token-weighted intent matching -------------------------
+
+    // lowercase, strip punctuation (keeps letters/digits of any language), collapse spaces
+    normalize(text) {
+        return text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    // normalized words with stop words and 1-letter tokens removed
+    tokenize(text) {
+        return this.normalize(text)
+            .split(' ')
+            .filter(word => word.length > 1 && !this.stopWords.has(word));
+    }
+
+    // Damerau-Levenshtein (edit distance where swapping 2 letters counts as 1 edit)
+    editDistance(a, b) {
+        const d = [];
+        for (let i = 0; i <= a.length; i++) d[i] = [i];
+        for (let j = 1; j <= b.length; j++) d[0][j] = j;
+        for (let i = 1; i <= a.length; i++) {
+            for (let j = 1; j <= b.length; j++) {
+                const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+                if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+                    d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
                 }
             }
         }
-        
-        // Determine context topic for dynamic suggestion chips
-        if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('pricing') || lowerMessage.includes('plan')) {
-            topic = 'pricing';
-        } else if (lowerMessage.includes('demo')) {
-            topic = 'demo';
-        } else if (lowerMessage.includes('service') || lowerMessage.includes('feature')) {
-            topic = 'services';
-        } else if (lowerMessage.includes('work')) {
-            topic = 'work';
-        } else if (lowerMessage.includes('setup') || lowerMessage.includes('install')) {
-            topic = 'setup';
-        } else if (lowerMessage.includes('industry') || lowerMessage.includes('business')) {
-            topic = 'industries';
-        } else if (lowerMessage.includes('support') || lowerMessage.includes('help') || lowerMessage.includes('contact')) {
-            topic = 'support';
-        }
-        
-        // Use fallback response if no match found
-        if (!response) {
-            response = this.fallbackResponses[Math.floor(Math.random() * this.fallbackResponses.length)];
-        }
-        
-        this.addMessage('bot', response);
-        const suggestions = this.quickReplySuggestions[topic] || this.quickReplySuggestions['default'];
-        this.renderQuickReplies(suggestions);
+        return d[a.length][b.length];
     }
+
+    // 1 = same word, 0.85 = probable typo, 0 = different.
+    // Short keywords (< 5 letters) must match exactly to avoid false hits ("test" vs "text").
+    tokenSimilarity(token, keyword) {
+        if (token === keyword) return 1;
+        if (keyword.length < 5 || token[0] !== keyword[0]) return 0;
+        const maxEdits = keyword.length >= 8 ? 2 : 1;
+        return this.editDistance(token, keyword) <= maxEdits ? 0.85 : 0;
+    }
+
+    // Score every intent 0..1, best first. Each matched word/phrase contributes its
+    // weight; hits combine as 1 - (1-w1)(1-w2)... so several weak hits add up but
+    // the score never exceeds 1.
+    scoreIntents(message) {
+        const sentence = ` ${this.normalize(message)} `;
+        const tokens = this.tokenize(message);
+
+        return Object.entries(this.intents).map(([name, intent]) => {
+            const hits = [];
+
+            for (const [phrase, weight] of intent.phrases) {
+                if (sentence.includes(` ${phrase} `)) hits.push(weight);
+            }
+            // each word the user typed counts once, using its best-matching keyword
+            for (const token of new Set(tokens)) {
+                const best = Math.max(0, ...intent.keywords.map(([kw, weight]) => weight * this.tokenSimilarity(token, kw)));
+                if (best > 0) hits.push(best);
+            }
+
+            const score = 1 - hits.reduce((miss, w) => miss * (1 - w), 1);
+            return { name, score, response: intent.response, topic: intent.topic };
+        }).sort((a, b) => b.score - a.score);
+    }
+
+    generateResponse(userMessage) {
+        const CONFIDENCE_THRESHOLD = 0.4;
+        const [best] = this.scoreIntents(userMessage);
+
+        let response;
+        let topic;
+
+        if (best.score >= CONFIDENCE_THRESHOLD) {
+            response = this.responses[best.response];
+            topic = best.topic;
+        } else {
+            response = this.fallbackResponses[Math.floor(Math.random() * this.fallbackResponses.length)];
+            // smart suggestions: if something matched weakly, offer that topic's chips
+            topic = best.score > 0 ? best.topic : 'default';
+        }
+
+        if (this.debug) {
+            console.log(`[intent] "${userMessage}" -> ${best.name} (confidence ${best.score.toFixed(2)})`,
+                best.score >= CONFIDENCE_THRESHOLD ? '' : '-> below 0.4, using fallback');
+        }
+
+        this.addMessage('bot', response);
+        this.renderQuickReplies(this.quickReplySuggestions[topic] || this.quickReplySuggestions['default']);
+    }
+    
     
     renderQuickReplies(chips) {
         if (!this.quickReplies) return;
@@ -366,4 +475,4 @@ style.textContent = `
     }
 }
 `;
-document.head.appendChild(style);
+document.head.appendChild(style);
