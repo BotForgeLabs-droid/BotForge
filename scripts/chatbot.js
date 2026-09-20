@@ -1,5 +1,61 @@
 // Interactive Chatbot Demo functionality
 
+class ChatStateManager {
+    static STORAGE_KEY = 'botforge_chat_session';
+    static EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+    static saveSession(messages, topic = 'default') {
+        try {
+            const data = {
+                timestamp: Date.now(),
+                messages: messages,
+                topic: topic
+            };
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+        } catch (error) {
+            console.warn('ChatStateManager: Failed to save session to localStorage (Quota exceeded or storage disabled).', error);
+        }
+    }
+
+    static loadSession() {
+        try {
+            const dataStr = localStorage.getItem(this.STORAGE_KEY);
+            if (!dataStr) return null;
+
+            const sessionData = JSON.parse(dataStr);
+            if (!sessionData || typeof sessionData !== 'object') {
+                this.clearSession();
+                return null;
+            }
+
+            // Check 24-hour expiration
+            if (Date.now() - sessionData.timestamp > this.EXPIRATION_MS) {
+                this.clearSession();
+                return null;
+            }
+
+            if (!Array.isArray(sessionData.messages)) {
+                this.clearSession();
+                return null;
+            }
+
+            return sessionData;
+        } catch (error) {
+            console.warn('ChatStateManager: Corrupted session data detected. Resetting chat state.', error);
+            this.clearSession();
+            return null;
+        }
+    }
+
+    static clearSession() {
+        try {
+            localStorage.removeItem(this.STORAGE_KEY);
+        } catch (error) {
+            console.warn('ChatStateManager: Unable to clear localStorage item.', error);
+        }
+    }
+}
+
 class ChatbotDemo {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
@@ -8,6 +64,9 @@ class ChatbotDemo {
         this.sendButton = document.getElementById('chatbotSend');
         this.quickReplies = document.getElementById('quickReplies');
         
+        this.messages = [];
+        this.activeTopic = 'default';
+
         this.responses = {
             'What services do you offer?': 'We offer AI-powered chatbots that can handle customer support, lead generation, appointment booking, and more! Our chatbots work 24/7 to help grow your business.',
             'How much does it cost?': 'Our plans start at just ₹799/month for small businesses. We also offer Pro (₹1999/month) and Enterprise (₹2999/month) plans. All include a free trial!',
@@ -49,13 +108,32 @@ class ChatbotDemo {
         if (!this.container) return;
         
         this.bindEvents();
-        this.showTypingIndicator();
-        
-        setTimeout(() => {
-            this.hideTypingIndicator();
-            this.addMessage('bot', 'Hello! I\'m your AI assistant. How can I help you today?');
-            this.renderQuickReplies(this.quickReplySuggestions['default']);
-        }, 1500);
+
+        const session = ChatStateManager.loadSession();
+        if (session && session.messages && session.messages.length > 0) {
+            if (this.messagesContainer) {
+                this.messagesContainer.innerHTML = '';
+            }
+            this.activeTopic = session.topic || 'default';
+            this.messages = [];
+            session.messages.forEach(msg => {
+                this.addMessage(msg.sender, msg.text, msg.time, false);
+                this.messages.push(msg);
+            });
+            const suggestions = this.quickReplySuggestions[this.activeTopic] || this.quickReplySuggestions['default'];
+            this.renderQuickReplies(suggestions);
+        } else {
+            if (this.messagesContainer) {
+                this.messagesContainer.innerHTML = '';
+            }
+            this.showTypingIndicator();
+            
+            setTimeout(() => {
+                this.hideTypingIndicator();
+                this.addMessage('bot', 'Hello! I\'m your AI assistant. How can I help you today?');
+                this.renderQuickReplies(this.quickReplySuggestions['default']);
+            }, 1500);
+        }
     }
     
     bindEvents() {
@@ -178,6 +256,8 @@ class ChatbotDemo {
         } else if (lowerMessage.includes('support') || lowerMessage.includes('help') || lowerMessage.includes('contact')) {
             topic = 'support';
         }
+
+        this.activeTopic = topic;
         
         // Use fallback response if no match found
         if (!response) {
@@ -211,7 +291,7 @@ class ChatbotDemo {
         });
     }
     
-    addMessage(sender, text) {
+    addMessage(sender, text, timestampOverride = null, saveToStorage = true) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${sender}-message`;
         
@@ -225,12 +305,14 @@ class ChatbotDemo {
         const messageParagraph = document.createElement('p');
         messageParagraph.textContent = text;
         
-        const timestamp = document.createElement('span');
-        timestamp.className = 'message-time';
-        timestamp.textContent = new Date().toLocaleTimeString([], {
+        const timeText = timestampOverride || new Date().toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit'
         });
+        
+        const timestamp = document.createElement('span');
+        timestamp.className = 'message-time';
+        timestamp.textContent = timeText;
         
         content.appendChild(messageParagraph);
         content.appendChild(timestamp);
@@ -256,6 +338,11 @@ class ChatbotDemo {
             setTimeout(() => {
                 messageDiv.classList.remove('message-enter');
             }, 300);
+        }
+
+        if (saveToStorage) {
+            this.messages.push({ sender, text, time: timeText });
+            ChatStateManager.saveSession(this.messages, this.activeTopic);
         }
     }
     
@@ -366,4 +453,5 @@ style.textContent = `
     }
 }
 `;
-document.head.appendChild(style);
+document.head.appendChild(style);
+
