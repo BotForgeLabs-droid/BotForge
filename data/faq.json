@@ -1,0 +1,47 @@
+{
+  "responses": {
+    "What services do you offer?": "We provide AI-powered chatbots for customer support, lead generation, appointment booking, FAQ handling, and customer engagement. Our solutions are designed to help businesses save time, improve response rates, and deliver support 24/7.",
+
+    "How much does it cost?": "We offer flexible pricing plans to suit businesses of all sizes. Plans start at ₹799/month, with Pro and Enterprise options available for growing businesses that need advanced features and higher usage limits.",
+
+    "Can I get a demo?": "Absolutely! You're already interacting with a live demo. For a personalized demonstration tailored to your business needs, simply click the 'Get Free Demo' button and our team will reach out.",
+
+    "How does it work?": "Getting started is simple: 1) Tell us about your business, 2) We create and customize your AI chatbot, 3) The chatbot is deployed on your website or platform, 4) It starts interacting with customers instantly.",
+
+    "What industries do you serve?": "Our chatbot solutions are suitable for restaurants, retail stores, healthcare providers, educational institutions, fitness centers, real estate agencies, service businesses, and many other industries.",
+
+    "Is it easy to setup?": "Yes! Our setup process is quick and beginner-friendly. Most businesses can get started within minutes, and our team provides assistance throughout the onboarding process.",
+
+    "pricing": "Our pricing is designed to be affordable and scalable. Whether you're a startup, small business, or enterprise, we offer plans that fit your requirements and budget.",
+
+    "demo": "You're currently experiencing a live chatbot demo. This demonstrates how an AI assistant can answer questions, engage visitors, and help convert leads into customers.",
+
+    "hello": "Hello and welcome to BotBazzar! 👋 I'm your AI assistant. Feel free to ask about our services, pricing, setup process, or how AI chatbots can help your business grow.",
+
+    "hi": "Hi there! 👋 Great to have you here. I'm ready to answer your questions about our chatbot solutions and how they can benefit your business.",
+
+    "help": "I'm here to help! You can ask me about our services, pricing plans, chatbot features, setup process, supported industries, or how to schedule a personalized demo.",
+
+    "support": "Our AI chatbots provide reliable 24/7 support by answering customer questions, handling common requests, capturing leads, and assisting website visitors at any time.",
+
+    "contact": "You can get in touch with our team by clicking the 'Get Free Demo' or 'Get Started' button. We'll be happy to discuss your business requirements and recommend the best solution.",
+
+    "features": "Our chatbot features include instant customer support, lead capture, appointment booking, FAQ automation, multilingual support, analytics, and seamless website integration.",
+
+    "appointment": "Yes! Our chatbots can help schedule appointments, collect booking information, send reminders, and streamline your customer interactions.",
+
+    "integration": "Our chatbot can be integrated into websites and other digital platforms, making it easy to engage visitors wherever your customers interact with your business."
+  },
+
+  "fallbackResponses": [
+    "That's a great question! Our AI chatbot solutions are designed to help businesses improve customer engagement and support. Feel free to ask about pricing, features, or demos.",
+
+    "I'd be happy to help with that. If you'd like more specific information, our team can provide a personalized consultation tailored to your business needs.",
+
+    "Interesting question! Our chatbot technology can be customized for a wide range of business requirements. Ask me about services, setup, pricing, or integrations.",
+
+    "Thanks for asking! While I may not have the exact answer, our team would be happy to assist you further. Click 'Get Free Demo' to connect with us.",
+
+    "I may not fully understand that question yet, but I can help with information about our chatbot services, pricing, features, industries we serve, and onboarding process."
+  ]
+}
