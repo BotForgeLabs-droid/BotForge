@@ -1,1113 +1,512 @@
-// Contact Form functionality with validation, submission,
-// Lead Management Data Store and CSV Exporter
+// Interactive Chatbot Demo functionality
 
-// ============================================================
-// LEAD MANAGER
-// ============================================================
+class ChatStateManager {
+    static STORAGE_KEY = 'botforge_chat_session';
+    static EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-class LeadManager {
-    constructor() {
-        this.storageKey = 'botforge_leads';
-        this.leads = this.loadLeads();
+    static saveSession(messages, topic = 'default') {
+        try {
+            const data = {
+                timestamp: Date.now(),
+                messages: messages,
+                topic: topic
+            };
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+        } catch (error) {
+            console.warn('ChatStateManager: Failed to save session to localStorage (Quota exceeded or storage disabled).', error);
+        }
     }
 
-    // Load previously stored leads
-    loadLeads() {
+    static loadSession() {
         try {
-            const storedLeads = localStorage.getItem(this.storageKey);
+            const dataStr = localStorage.getItem(this.STORAGE_KEY);
+            if (!dataStr) return null;
 
-            if (!storedLeads) {
-                return [];
+            const sessionData = JSON.parse(dataStr);
+            if (!sessionData || typeof sessionData !== 'object') {
+                this.clearSession();
+                return null;
             }
 
-            const parsedLeads = JSON.parse(storedLeads);
-
-            return Array.isArray(parsedLeads) ? parsedLeads : [];
-        } catch (error) {
-            console.error('Could not load leads:', error);
-            return [];
-        }
-    }
-
-    // Save leads to localStorage
-    saveLeads() {
-        try {
-            localStorage.setItem(
-                this.storageKey,
-                JSON.stringify(this.leads)
-            );
-        } catch (error) {
-            console.error('Could not save leads:', error);
-        }
-    }
-
-    // Add a new lead
-    addLead(leadData) {
-        const lead = {
-            id: Date.now(),
-            name: leadData.name,
-            email: leadData.email,
-            business: leadData.business,
-            message: leadData.message,
-            submittedAt: new Date().toISOString()
-        };
-
-        this.leads.push(lead);
-        this.saveLeads();
-
-        return lead;
-    }
-
-    // Get all leads
-    getLeads() {
-        return [...this.leads];
-    }
-
-    // Convert a value into safe CSV format
-    escapeCSV(value) {
-        if (value === null || value === undefined) {
-            return '';
-        }
-
-        const stringValue = String(value);
-
-        // Escape quotes by doubling them
-        const escapedValue = stringValue.replace(/"/g, '""');
-
-        // Wrap every value in quotes
-        return `"${escapedValue}"`;
-    }
-
-    // Convert all leads into CSV
-    generateCSV() {
-        const headers = [
-            'ID',
-            'Name',
-            'Email',
-            'Business Type',
-            'Message',
-            'Submitted At'
-        ];
-
-        const rows = this.leads.map(lead => {
-            return [
-                this.escapeCSV(lead.id),
-                this.escapeCSV(lead.name),
-                this.escapeCSV(lead.email),
-                this.escapeCSV(lead.business),
-                this.escapeCSV(lead.message),
-                this.escapeCSV(lead.submittedAt)
-            ].join(',');
-        });
-
-        return [
-            headers.join(','),
-            ...rows
-        ].join('\n');
-    }
-
-    // Download leads as leads.csv
-    downloadCSV() {
-        if (this.leads.length === 0) {
-            alert('No leads available to export.');
-            return;
-        }
-
-        const csvContent = this.generateCSV();
-
-        const blob = new Blob(
-            [csvContent],
-            {
-                type: 'text/csv;charset=utf-8;'
+            // Check 24-hour expiration
+            if (Date.now() - sessionData.timestamp > this.EXPIRATION_MS) {
+                this.clearSession();
+                return null;
             }
-        );
 
-        const url = URL.createObjectURL(blob);
+            if (!Array.isArray(sessionData.messages)) {
+                this.clearSession();
+                return null;
+            }
 
-        const downloadLink = document.createElement('a');
-
-        downloadLink.href = url;
-        downloadLink.download = 'leads.csv';
-
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-
-        document.body.removeChild(downloadLink);
-
-        URL.revokeObjectURL(url);
+            return sessionData;
+        } catch (error) {
+            console.warn('ChatStateManager: Corrupted session data detected. Resetting chat state.', error);
+            this.clearSession();
+            return null;
+        }
     }
 
-    // Remove all stored leads
-    clearLeads() {
-        this.leads = [];
-        this.saveLeads();
+    static clearSession() {
+        try {
+            localStorage.removeItem(this.STORAGE_KEY);
+        } catch (error) {
+            console.warn('ChatStateManager: Unable to clear localStorage item.', error);
+        }
     }
 }
 
+class ChatbotDemo {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.messagesContainer = document.getElementById('chatbotMessages');
+        this.input = document.getElementById('chatbotInput');
+        this.sendButton = document.getElementById('chatbotSend');
+        this.quickReplies = document.getElementById('quickReplies');
 
-// ============================================================
-// CONTACT FORM
-// ============================================================
+        this.messages = [];
+        this.activeTopic = 'default';
 
-class ContactForm {
+        this.responses = {
+            'What services do you offer?': 'We offer AI-powered chatbots that can handle customer support, lead generation, appointment booking, and more! Our chatbots work 24/7 to help grow your business.',
+            'How much does it cost?': 'Our plans start at just ₹799/month for small businesses. We also offer Pro (₹1999/month) and Enterprise (₹2999/month) plans. All include a free trial!',
+            'Can I get a demo?': 'Absolutely! You\'re already experiencing our demo right now! 😊 For a personalized demo of how our chatbot would work for YOUR business, just fill out our contact form below.',
+            'How does it work?': 'It\'s simple! 1) Tell us about your business 2) We build a custom AI chatbot 3) You launch and start seeing results. Most clients are up and running within 48 hours!',
+            'What industries do you serve?': 'We work with restaurants, fitness centers, retail stores, healthcare practices, real estate agencies, and many more! Our AI adapts to any industry.',
+            'Is it easy to setup?': 'Yes! Setup takes just minutes with our plug-and-play integration. No technical skills required - we handle everything for you.',
+            'pricing': 'Our pricing is designed to fit businesses of all sizes! Starter (₹799/mo), Pro (₹1999/mo), and Enterprise (₹2999/mo). All plans include 24/7 support and a money-back guarantee.',
+            'demo': 'You\'re chatting with our AI right now! Pretty cool, right? 🚀 This is just a taste of what our chatbots can do for your business.',
+            'hello': 'Hello there! 👋 Welcome to BotBazzar! I\'m here to show you how our AI chatbots can transform your business. What would you like to know?',
+            'hi': 'Hi! Great to meet you! I\'m your AI assistant demo. I can tell you all about our chatbot solutions. What\'s your biggest customer service challenge?',
+            'help': 'I\'m here to help! You can ask me about:\n• Our services and features\n• Pricing and plans\n• How our chatbots work\n• Getting a personalized demo\n\nWhat interests you most?',
+            'support': 'Our AI chatbots provide 24/7 customer support, answering FAQs, booking appointments, and more. They\'re like having a full support team without the overhead!',
+            'contact': ' You can reach our human team anytime by clicking the "Get Free Demo" button above or the "Get Started" button. We\'d love to chat about how we can help your business!',
+        };
 
-    constructor(formId) {
+        this.fallbackResponses = [
+            'That\'s a great question! Our AI chatbots can definitely help with that. Would you like to schedule a personalized demo to discuss your specific needs?',
+            'I\'d love to tell you more about that! Our team specializes in creating custom solutions. Click "Get Free Demo" above to speak with a human expert!',
+            'Interesting! Our AI learns from conversations like this to better serve your customers. Want to see how this could work for your business?',
+            'Great point! That\'s exactly the kind of thing our chatbots excel at. Ready to see how we can help your specific business? Let\'s chat!'
+        ];
 
-        this.form = document.getElementById(formId);
+        this.quickReplySuggestions = {
+            'default': ['Tell me about Pricing', 'Book a Demo', 'What services do you offer?'],
+            'services': ['Tell me about Pricing', 'Book a Demo', 'How does it work?'],
+            'pricing': ['Book a Demo', 'What industries do you serve?', 'Is it easy to setup?'],
+            'demo': ['Tell me about Pricing', 'How does it work?', 'What services do you offer?'],
+            'work': ['Is it easy to setup?', 'Book a Demo', 'Tell me about Pricing'],
+            'industries': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo'],
+            'setup': ['Book a Demo', 'Tell me about Pricing', 'What services do you offer?'],
+            'support': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo']
+        };
 
-        this.fields = {};
-
-        this.isSubmitting = false;
-
-        // Create Lead Manager
-        this.leadManager = new LeadManager();
-
-        if (this.form) {
-            this.init();
-        }
+        this.init();
     }
-
-
-    // ========================================================
-    // INITIALIZATION
-    // ========================================================
 
     init() {
+        if (!this.container) return;
 
-        this.bindFields();
-
+        this.setupAutoScroll();
         this.bindEvents();
 
-        this.createExportButton();
-    }
-
-
-    // ========================================================
-    // FORM FIELDS
-    // ========================================================
-
-    bindFields() {
-
-        const fieldSelectors = [
-            'name',
-            'email',
-            'business',
-            'message'
-        ];
-
-        fieldSelectors.forEach(field => {
-
-            const element = document.getElementById(field);
-
-            const errorElement =
-                document.getElementById(`${field}Error`);
-
-            if (element) {
-
-                this.fields[field] = {
-
-                    element,
-
-                    errorElement,
-
-                    value: '',
-
-                    isValid: false
-                };
+        const session = ChatStateManager.loadSession();
+        if (session && session.messages && session.messages.length > 0) {
+            if (this.messagesContainer) {
+                this.messagesContainer.innerHTML = '';
             }
-        });
-    }
-
-
-    // ========================================================
-    // EVENTS
-    // ========================================================
-
-    bindEvents() {
-
-        // Form submission
-        this.form.addEventListener(
-            'submit',
-            (e) => this.handleSubmit(e)
-        );
-
-
-        // Real-time validation
-        Object.keys(this.fields).forEach(fieldName => {
-
-            const field = this.fields[fieldName];
-
-
-            // Input event
-            field.element.addEventListener(
-                'input',
-                () => this.validateField(fieldName)
-            );
-
-
-            // Blur event
-            field.element.addEventListener(
-                'blur',
-                () => this.validateField(fieldName)
-            );
-
-
-            // Focus event
-            field.element.addEventListener(
-                'focus',
-                () => this.clearFieldError(fieldName)
-            );
-        });
-    }
-
-
-    // ========================================================
-    // VALIDATE SINGLE FIELD
-    // ========================================================
-
-    validateField(fieldName) {
-
-        const field = this.fields[fieldName];
-
-        if (!field) {
-            return false;
-        }
-
-
-        const value = field.element.value.trim();
-
-        field.value = value;
-
-
-        let isValid = false;
-
-        let errorMessage = '';
-
-
-        switch (fieldName) {
-
-            case 'name':
-
-                isValid =
-                    value.length >= 2 &&
-                    /^[a-zA-Z\s]+$/.test(value);
-
-                errorMessage =
-                    isValid
-                        ? ''
-                        : 'Please enter a valid name (letters only, min 2 characters)';
-
-                break;
-
-
-            case 'email':
-
-                const emailRegex =
-                    /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-                isValid =
-                    emailRegex.test(value);
-
-                errorMessage =
-                    isValid
-                        ? ''
-                        : 'Please enter a valid email address';
-
-                break;
-
-
-            case 'business':
-
-                isValid =
-                    value !== '';
-
-                errorMessage =
-                    isValid
-                        ? ''
-                        : 'Please select your business type';
-
-                break;
-
-
-            case 'message':
-
-                isValid =
-                    value.length >= 10;
-
-                errorMessage =
-                    isValid
-                        ? ''
-                        : 'Please provide more details (minimum 10 characters)';
-
-                break;
-        }
-
-
-        field.isValid = isValid;
-
-        this.updateFieldUI(
-            fieldName,
-            isValid,
-            errorMessage
-        );
-
-
-        return isValid;
-    }
-
-
-    // ========================================================
-    // UPDATE FIELD UI
-    // ========================================================
-
-    updateFieldUI(
-        fieldName,
-        isValid,
-        errorMessage
-    ) {
-
-        const field = this.fields[fieldName];
-
-        const formGroup =
-            field.element.parentElement;
-
-
-        // Remove existing classes
-        formGroup.classList.remove(
-            'error',
-            'success'
-        );
-
-
-        if (field.value) {
-
-            // Add appropriate class
-            formGroup.classList.add(
-                isValid
-                    ? 'success'
-                    : 'error'
-            );
-
-
-            // Show / hide error message
-            if (field.errorElement) {
-
-                field.errorElement.textContent =
-                    errorMessage;
-            }
-        }
-    }
-
-
-    // ========================================================
-    // CLEAR FIELD ERROR
-    // ========================================================
-
-    clearFieldError(fieldName) {
-
-        const field = this.fields[fieldName];
-
-        const formGroup =
-            field.element.parentElement;
-
-
-        if (formGroup.classList.contains('error')) {
-
-            formGroup.classList.remove('error');
-
-
-            if (field.errorElement) {
-
-                field.errorElement.textContent = '';
-            }
-        }
-    }
-
-
-    // ========================================================
-    // VALIDATE COMPLETE FORM
-    // ========================================================
-
-    validateForm() {
-
-        let isFormValid = true;
-
-
-        Object.keys(this.fields).forEach(
-            fieldName => {
-
-                if (!this.validateField(fieldName)) {
-
-                    isFormValid = false;
-                }
-            }
-        );
-
-
-        return isFormValid;
-    }
-
-
-    // ========================================================
-    // HANDLE FORM SUBMISSION
-    // ========================================================
-
-    async handleSubmit(e) {
-
-        e.preventDefault();
-
-
-        if (this.isSubmitting) {
-            return;
-        }
-
-
-        // Validate form
-        if (!this.validateForm()) {
-
-            this.showFormError(
-                'Please correct the errors above'
-            );
-
-            this.shakeForm();
-
-            return;
-        }
-
-
-        this.isSubmitting = true;
-
-        this.showLoadingState();
-
-
-        // Prepare lead data
-        const leadData = {
-
-            name: this.fields.name.value,
-
-            email: this.fields.email.value,
-
-            business: this.fields.business.value,
-
-            message: this.fields.message.value
-        };
-
-
-        try {
-
-            // =================================================
-            // 1. STORE LEAD
-            // =================================================
-
-            this.leadManager.addLead(leadData);
-
-
-            // =================================================
-            // 2. SEND WELCOME EMAIL TO CUSTOMER
-            // =================================================
-
-            await emailjs.send(
-                "service_xjvwrpe",
-                "template_smrpqqs",
-                {
-                    name: this.fields.name.value,
-
-                    email: this.fields.email.value,
-
-                    business: this.fields.business.value,
-
-                    message: this.fields.message.value
-                }
-            );
-
-
-            // =================================================
-            // 3. SEND NOTIFICATION EMAIL TO ADMIN
-            // =================================================
-
-            await emailjs.send(
-                "service_xjvwrpe",
-                "template_iljigj5",
-                {
-                    name: this.fields.name.value,
-
-                    email: this.fields.email.value,
-
-                    business: this.fields.business.value,
-
-                    message: this.fields.message.value
-                }
-            );
-
-
-            // =================================================
-            // 4. SUCCESS
-            // =================================================
-
-            this.showToast(
-                "Message sent successfully!",
-                "success"
-            );
-
-
-            this.showSuccess();
-
-
-            // Make sure export button is visible
-            this.updateExportButton();
-
-
-        } catch (error) {
-
-            console.error(
-                "EmailJS Error:",
-                error.text ||
-                error.message ||
-                error
-            );
-
-
-            alert(
-                `EmailJS Error: ${
-                    error.text ||
-                    error.message ||
-                    "Unknown error"
-                }`
-            );
-
-
-            this.showFormError(
-                "Something went wrong. Please try again."
-            );
-
-
-        } finally {
-
-            this.isSubmitting = false;
-
-            this.hideLoadingState();
-        }
-    }
-
-
-    // ========================================================
-    // CREATE EXPORT BUTTON
-    // ========================================================
-
-    createExportButton() {
-
-        // Don't create duplicate button
-        if (
-            document.getElementById(
-                'exportLeadsBtn'
-            )
-        ) {
-            return;
-        }
-
-
-        const submitBtn =
-            document.getElementById('submitBtn');
-
-
-        if (!submitBtn) {
-            return;
-        }
-
-
-        const exportBtn =
-            document.createElement('button');
-
-
-        exportBtn.id =
-            'exportLeadsBtn';
-
-
-        exportBtn.type =
-            'button';
-
-
-        exportBtn.textContent =
-            'Download Leads CSV';
-
-
-        // Basic styling
-        Object.assign(
-            exportBtn.style,
-            {
-                display: 'none',
-
-                width: '100%',
-
-                marginTop: '12px',
-
-                padding: '14px 20px',
-
-                border: 'none',
-
-                borderRadius: '8px',
-
-                background:
-                    'linear-gradient(135deg, #3B82F6, #8B5CF6)',
-
-                color: '#ffffff',
-
-                fontSize: '16px',
-
-                fontWeight: '600',
-
-                cursor: 'pointer'
-            }
-        );
-
-
-        // Download CSV when clicked
-        exportBtn.addEventListener(
-            'click',
-            () => {
-
-                this.leadManager.downloadCSV();
-            }
-        );
-
-
-        // Add button after submit button
-        submitBtn.parentNode.insertBefore(
-            exportBtn,
-            submitBtn.nextSibling
-        );
-
-
-        this.updateExportButton();
-    }
-
-
-    // ========================================================
-    // UPDATE EXPORT BUTTON
-    // ========================================================
-
-    updateExportButton() {
-
-        const exportBtn =
-            document.getElementById(
-                'exportLeadsBtn'
-            );
-
-
-        if (!exportBtn) {
-            return;
-        }
-
-
-        const hasLeads =
-            this.leadManager.getLeads().length > 0;
-
-
-        exportBtn.style.display =
-            hasLeads
-                ? 'block'
-                : 'none';
-    }
-
-
-    // ========================================================
-    // SIMULATE FORM SUBMISSION
-    // ========================================================
-
-    async simulateFormSubmission() {
-
-        // Simulate network delay
-        await new Promise(
-            resolve =>
-                setTimeout(resolve, 2000)
-        );
-
-
-        // Simulate random success/failure
-        if (Math.random() < 0.9) {
-
-            return {
-                success: true
-            };
-
+            this.activeTopic = session.topic || 'default';
+            this.messages = [];
+            session.messages.forEach(msg => {
+                this.addMessage(msg.sender, msg.text, msg.time, false);
+                this.messages.push(msg);
+            });
+            const suggestions = this.quickReplySuggestions[this.activeTopic] || this.quickReplySuggestions['default'];
+            this.renderQuickReplies(suggestions);
+            this.scrollToBottom();
         } else {
-
-            throw new Error(
-                'Simulated network error'
-            );
-        }
-    }
-
-
-    // ========================================================
-    // LOADING STATE
-    // ========================================================
-
-    showLoadingState() {
-
-        const submitBtn =
-            document.getElementById(
-                'submitBtn'
-            );
-
-
-        if (submitBtn) {
-
-            submitBtn.classList.add(
-                'loading'
-            );
-
-            submitBtn.disabled = true;
-        }
-    }
-
-
-    hideLoadingState() {
-
-        const submitBtn =
-            document.getElementById(
-                'submitBtn'
-            );
-
-
-        if (submitBtn) {
-
-            submitBtn.classList.remove(
-                'loading'
-            );
-
-            submitBtn.disabled = false;
-        }
-    }
-
-
-    // ========================================================
-    // FORM ERROR
-    // ========================================================
-
-    showFormError(message) {
-
-        console.error(
-            'Form Error:',
-            message
-        );
-
-
-        this.showToast(
-            message,
-            'error'
-        );
-    }
-
-
-    // ========================================================
-    // SUCCESS MODAL
-    // ========================================================
-
-    showSuccess() {
-
-        const modal =
-            document.getElementById(
-                'successModal'
-            );
-
-
-        if (!modal) {
-            return;
-        }
-
-
-        modal.classList.add('show');
-
-
-        const closeBtn =
-            document.getElementById(
-                'modalClose'
-            );
-
-
-        const handleClose = () => {
-
-            modal.classList.remove(
-                'show'
-            );
-
-
-            this.resetForm();
-
-
-            if (closeBtn) {
-
-                closeBtn.removeEventListener(
-                    'click',
-                    handleClose
-                );
+            if (this.messagesContainer) {
+                this.messagesContainer.innerHTML = '';
             }
-
-
-            modal.removeEventListener(
-                'click',
-                handleModalClick
-            );
-        };
-
-
-        const handleModalClick = (e) => {
-
-            if (e.target === modal) {
-
-                handleClose();
-            }
-        };
-
-
-        if (closeBtn) {
-
-            closeBtn.addEventListener(
-                'click',
-                handleClose
-            );
-        }
-
-
-        modal.addEventListener(
-            'click',
-            handleModalClick
-        );
-    }
-
-
-    // ========================================================
-    // RESET FORM
-    // ========================================================
-
-    resetForm() {
-
-        this.form.reset();
-
-
-        // Clear validation states
-        Object.keys(this.fields).forEach(
-            fieldName => {
-
-                const field =
-                    this.fields[fieldName];
-
-
-                const formGroup =
-                    field.element.parentElement;
-
-
-                formGroup.classList.remove(
-                    'error',
-                    'success'
-                );
-
-
-                if (field.errorElement) {
-
-                    field.errorElement.textContent =
-                        '';
-                }
-
-
-                field.value = '';
-
-                field.isValid = false;
-            }
-        );
-
-
-        // Keep export button visible if leads exist
-        this.updateExportButton();
-    }
-
-
-    // ========================================================
-    // SHAKE FORM
-    // ========================================================
-
-    shakeForm() {
-
-        this.form.classList.add(
-            'animate-shake'
-        );
-
-
-        setTimeout(() => {
-
-            this.form.classList.remove(
-                'animate-shake'
-            );
-
-        }, 600);
-    }
-
-
-    // ========================================================
-    // TOAST
-    // ========================================================
-
-    showToast(
-        message,
-        type = 'info'
-    ) {
-
-        // Create toast
-        const toast =
-            document.createElement('div');
-
-
-        toast.className =
-            `toast toast-${type}`;
-
-
-        toast.textContent =
-            message;
-
-
-        // Style toast
-        Object.assign(
-            toast.style,
-            {
-                position: 'fixed',
-
-                top: '20px',
-
-                right: '20px',
-
-                backgroundColor:
-                    type === 'error'
-                        ? '#EF4444'
-                        : '#10B981',
-
-                color: 'white',
-
-                padding: '12px 24px',
-
-                borderRadius: '8px',
-
-                boxShadow:
-                    '0 4px 12px rgba(0, 0, 0, 0.15)',
-
-                zIndex: '10000',
-
-                transform:
-                    'translateX(100%)',
-
-                transition:
-                    'transform 0.3s ease'
-            }
-        );
-
-
-        document.body.appendChild(
-            toast
-        );
-
-
-        // Animate in
-        setTimeout(() => {
-
-            toast.style.transform =
-                'translateX(0)';
-
-        }, 100);
-
-
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-
-            toast.style.transform =
-                'translateX(100%)';
-
+            this.showTypingIndicator();
 
             setTimeout(() => {
+                this.hideTypingIndicator();
+                this.addMessage('bot', 'Hello! I\'m your AI assistant. How can I help you today?');
+                this.renderQuickReplies(this.quickReplySuggestions['default']);
+                this.scrollToBottom();
+            }, 1500);
+        }
+    }
 
-                if (toast.parentNode) {
+    bindEvents() {
+        // Send button click
+        if (this.sendButton) {
+            this.sendButton.addEventListener('click', () => this.handleSendMessage());
+        }
 
-                    toast.parentNode.removeChild(
-                        toast
-                    );
+        // Enter key press
+        if (this.input) {
+            this.input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.handleSendMessage();
                 }
+            });
 
+            // Auto-resize input
+            this.input.addEventListener('input', () => {
+                this.input.style.height = 'auto';
+                this.input.style.height = this.input.scrollHeight + 'px';
+            });
+        }
+
+        // Quick reply buttons
+        if (this.quickReplies) {
+            this.quickReplies.addEventListener('click', (e) => {
+                const button = e.target.closest('.quick-reply');
+                if (button && !button.disabled) {
+                    const message = button.getAttribute('data-message') || button.textContent;
+                    this.input.value = message;
+                    this.handleSendMessage();
+                }
+            });
+        }
+    }
+
+    handleSendMessage() {
+        const message = this.input.value.trim();
+        if (message) {
+            this.sendMessage(message);
+            this.input.value = '';
+            this.input.style.height = 'auto';
+        }
+    }
+
+    sendMessage(message) {
+        // Add user message
+        this.addMessage('user', message);
+
+        // Disable quick replies while processing
+        this.disableQuickReplies();
+
+        // Show typing indicator
+        this.showTypingIndicator();
+
+        // Simulate typing delay
+        setTimeout(() => {
+            this.hideTypingIndicator();
+            this.generateResponse(message);
+        }, 1000 + Math.random() * 1000);
+    }
+
+    generateResponse(userMessage) {
+        const lowerMessage = userMessage.toLowerCase();
+        let response = null;
+        let topic = 'default';
+
+        // Check for exact matches first
+        for (const [key, value] of Object.entries(this.responses)) {
+            if (lowerMessage.includes(key.toLowerCase())) {
+                response = value;
+                break;
+            }
+        }
+
+        // Check for partial matches
+        if (!response) {
+            const keywords = {
+                'price': this.responses['pricing'],
+                'cost': this.responses['pricing'],
+                'expensive': this.responses['pricing'],
+                'money': this.responses['pricing'],
+                'plan': this.responses['pricing'],
+                'demo': this.responses['demo'],
+                'try': this.responses['demo'],
+                'test': this.responses['demo'],
+                'service': this.responses['What services do you offer?'],
+                'feature': this.responses['What services do you offer?'],
+                'work': this.responses['How does it work?'],
+                'setup': this.responses['Is it easy to setup?'],
+                'install': this.responses['Is it easy to setup?'],
+                'industry': this.responses['What industries do you serve?'],
+                'business': this.responses['What industries do you serve?'],
+                'contact': this.responses['contact'],
+                'support': this.responses['support'],
+                'help': this.responses['help']
+            };
+
+            for (const [keyword, responseText] of Object.entries(keywords)) {
+                if (lowerMessage.includes(keyword)) {
+                    response = responseText;
+                    break;
+                }
+            }
+        }
+
+        // Determine context topic for dynamic suggestion chips
+        if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('pricing') || lowerMessage.includes('plan')) {
+            topic = 'pricing';
+        } else if (lowerMessage.includes('demo')) {
+            topic = 'demo';
+        } else if (lowerMessage.includes('service') || lowerMessage.includes('feature')) {
+            topic = 'services';
+        } else if (lowerMessage.includes('work')) {
+            topic = 'work';
+        } else if (lowerMessage.includes('setup') || lowerMessage.includes('install')) {
+            topic = 'setup';
+        } else if (lowerMessage.includes('industry') || lowerMessage.includes('business')) {
+            topic = 'industries';
+        } else if (lowerMessage.includes('support') || lowerMessage.includes('help') || lowerMessage.includes('contact')) {
+            topic = 'support';
+        }
+
+        this.activeTopic = topic;
+
+        // Use fallback response if no match found
+        if (!response) {
+            response = this.fallbackResponses[Math.floor(Math.random() * this.fallbackResponses.length)];
+        }
+
+        this.addMessage('bot', response);
+        const suggestions = this.quickReplySuggestions[topic] || this.quickReplySuggestions['default'];
+        this.renderQuickReplies(suggestions);
+        this.scrollToBottom();
+    }
+
+    renderQuickReplies(chips) {
+        if (!this.quickReplies) return;
+        this.quickReplies.innerHTML = '';
+        this.quickReplies.style.display = 'flex';
+
+        chips.forEach(chipText => {
+            const button = document.createElement('button');
+            button.className = 'quick-reply';
+            button.setAttribute('data-message', chipText);
+            button.textContent = chipText;
+            this.quickReplies.appendChild(button);
+        });
+    }
+
+    disableQuickReplies() {
+        if (!this.quickReplies) return;
+        const buttons = this.quickReplies.querySelectorAll('.quick-reply');
+        buttons.forEach(btn => {
+            btn.disabled = true;
+        });
+    }
+
+    addMessage(sender, text, timestampOverride = null, saveToStorage = true) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${sender}-message`;
+
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        avatar.innerHTML = sender === 'bot' ? '<i data-lucide="bot"></i>' : '<i data-lucide="user"></i>';
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+
+        const messageParagraph = document.createElement('p');
+        messageParagraph.textContent = text;
+
+        const timeText = timestampOverride || new Date().toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        const timestamp = document.createElement('span');
+        timestamp.className = 'message-time';
+        timestamp.textContent = timeText;
+
+        content.appendChild(messageParagraph);
+        content.appendChild(timestamp);
+
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(content);
+
+        // Add animation class
+        messageDiv.classList.add('message-enter');
+
+        if (this.messagesContainer) {
+            this.messagesContainer.appendChild(messageDiv);
+
+            // Re-initialize Lucide icons for new message
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+
+            // Scroll to bottom immediately as message renders
+            this.scrollToBottom();
+
+            // Auto-scroll when message finishes rendering / animation completes
+            setTimeout(() => {
+                messageDiv.classList.remove('message-enter');
+                this.scrollToBottom();
             }, 300);
+        }
 
-        }, 5000);
+        if (saveToStorage) {
+            this.messages.push({ sender, text, time: timeText });
+            ChatStateManager.saveSession(this.messages, this.activeTopic);
+        }
+    }
+
+    showTypingIndicator() {
+        this.disableQuickReplies();
+
+        const existingIndicator = document.querySelector('.typing-message');
+        if (existingIndicator) return;
+
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'message bot-message typing-message message-enter';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        avatar.innerHTML = '<i data-lucide="bot"></i>';
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+
+        const typingIndicator = document.createElement('div');
+        typingIndicator.className = 'typing-indicator';
+        typingIndicator.innerHTML = '<span></span><span></span><span></span>';
+
+        content.appendChild(typingIndicator);
+        typingDiv.appendChild(avatar);
+        typingDiv.appendChild(content);
+
+        if (this.messagesContainer) {
+            this.messagesContainer.appendChild(typingDiv);
+
+            // Initialize icons
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+
+            // Scroll to bottom immediately
+            this.scrollToBottom();
+
+            // Auto-scroll when typing indicator finishes rendering / animation completes
+            setTimeout(() => {
+                typingDiv.classList.remove('message-enter');
+                this.scrollToBottom();
+            }, 300);
+        }
+    }
+
+    hideTypingIndicator() {
+        const typingIndicator = document.querySelector('.typing-message');
+        if (typingIndicator) {
+            typingIndicator.remove();
+        }
+    }
+
+    scrollToBottom() {
+        if (!this.messagesContainer) return;
+
+        // Immediate scroll
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+
+        // Smooth scroll if supported
+        if (typeof this.messagesContainer.scrollTo === 'function') {
+            try {
+                this.messagesContainer.scrollTo({
+                    top: this.messagesContainer.scrollHeight,
+                    behavior: 'smooth'
+                });
+            } catch (e) {
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+        }
+
+        // Ensure scroll reaches the exact bottom once rendering and layout reflow finish
+        requestAnimationFrame(() => {
+            if (this.messagesContainer) {
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+        });
+    }
+
+    setupAutoScroll() {
+        if (!this.messagesContainer || typeof MutationObserver === 'undefined') return;
+
+        const observer = new MutationObserver(() => {
+            this.scrollToBottom();
+        });
+
+        observer.observe(this.messagesContainer, {
+            childList: true,
+            subtree: true
+        });
     }
 }
 
-
-// ============================================================
-// FORM VALIDATION HELPERS
-// ============================================================
-
-const ValidationHelpers = {
-
-    isValidEmail: (email) => {
-
-        const re =
-            /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        return re.test(email);
-    },
-
-
-    isValidName: (name) => {
-
-        return (
-            name.length >= 2 &&
-            /^[a-zA-Z\s]+$/.test(name)
-        );
-    },
-
-
-    isValidPhone: (phone) => {
-
-        const re =
-            /^\+?[\d\s\-\(\)]+$/;
-
-        return (
-            re.test(phone) &&
-            phone.replace(/\D/g, '').length >= 10
-        );
-    },
-
-
-    sanitizeInput: (input) => {
-
-        return input
-            .trim()
-            .replace(/[<>]/g, '');
-    }
-};
-
-
-// ============================================================
-// INITIALIZE FORM
-// ============================================================
-
-document.addEventListener(
-    'DOMContentLoaded',
-    function () {
-
-        new ContactForm('contactForm');
-    }
-);
-
-
-// ============================================================
-// EXPORT FOR MODULAR USAGE
-// ============================================================
-
-if (
-    typeof module !== 'undefined' &&
-    module.exports
-) {
-
-    module.exports = {
-        ContactForm,
-        ValidationHelpers,
-        LeadManager
-    };
+// Initialize chatbot when DOM is loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+        new ChatbotDemo('chatbotWindow');
+    });
+} else {
+    new ChatbotDemo('chatbotWindow');
 }
+
+// Add CSS for message animations and disabled quick reply states
+const style = document.createElement('style');
+style.textContent = `
+.message-enter {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: messageEnter 0.3s ease-out forwards;
+}
+
+@keyframes messageEnter {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.quick-reply:disabled,
+.quick-reply[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 12px 16px;
+    background: var(--light-gray);
+    border-radius: var(--border-radius-lg);
+    width: fit-content;
+}
+
+.typing-indicator span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--medium-gray);
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+    }
+    30% {
+        transform: translateY(-10px);
+        opacity: 1;
+    }
+}
+`;
+document.head.appendChild(style);
