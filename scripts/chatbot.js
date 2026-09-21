@@ -1,5 +1,36 @@
 // Interactive Chatbot Demo functionality
 
+/**
+ * Sanitizes input text against Cross-Site Scripting (XSS) attacks by converting special characters to HTML entities.
+ * Neutralizes <script>, <iframe>, javascript: protocols, and HTML entity vectors.
+ * @param {string} str - Raw input string
+ * @returns {string} Sanitized string safe for DOM rendering
+ */
+function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .replace(/\//g, '&#x2F;');
+}
+
+const securityTestVectors = [
+    { payload: '<script>alert("XSS")</script>', description: 'Script tag injection' },
+    { payload: '<iframe src="javascript:alert(1)"></iframe>', description: 'Iframe javascript URI' },
+    { payload: '<img src=x onerror=alert(1)>', description: 'Image onerror handler' },
+    { payload: 'javascript:alert(document.cookie)', description: 'Javascript URI scheme' },
+    { payload: '<body onload=alert(1)>', description: 'Body onload trigger' },
+    { payload: '"/><script>alert(1)</script>', description: 'Attribute breakout XSS' }
+];
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.escapeHTML = escapeHTML;
+    globalThis.securityTestVectors = securityTestVectors;
+}
+
 class ChatStateManager {
     static STORAGE_KEY = 'botforge_chat_session';
     static EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -277,8 +308,9 @@ class ChatbotDemo {
         chips.forEach(chipText => {
             const button = document.createElement('button');
             button.className = 'quick-reply';
-            button.setAttribute('data-message', chipText);
-            button.textContent = chipText;
+            const safeText = escapeHTML(chipText);
+            button.setAttribute('data-message', safeText);
+            button.appendChild(document.createTextNode(chipText));
             this.quickReplies.appendChild(button);
         });
     }
@@ -303,7 +335,7 @@ class ChatbotDemo {
         content.className = 'message-content';
         
         const messageParagraph = document.createElement('p');
-        messageParagraph.textContent = text;
+        messageParagraph.appendChild(document.createTextNode(text));
         
         const timeText = timestampOverride || new Date().toLocaleTimeString([], {
             hour: '2-digit',
@@ -312,7 +344,7 @@ class ChatbotDemo {
         
         const timestamp = document.createElement('span');
         timestamp.className = 'message-time';
-        timestamp.textContent = timeText;
+        timestamp.appendChild(document.createTextNode(timeText));
         
         content.appendChild(messageParagraph);
         content.appendChild(timestamp);

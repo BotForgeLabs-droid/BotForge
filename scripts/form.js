@@ -1,512 +1,355 @@
-// Interactive Chatbot Demo functionality
+// Contact Form Validation and Handler functionality
 
-class ChatStateManager {
-    static STORAGE_KEY = 'botforge_chat_session';
-    static EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-    static saveSession(messages, topic = 'default') {
-        try {
-            const data = {
-                timestamp: Date.now(),
-                messages: messages,
-                topic: topic
-            };
-            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
-        } catch (error) {
-            console.warn('ChatStateManager: Failed to save session to localStorage (Quota exceeded or storage disabled).', error);
-        }
-    }
-
-    static loadSession() {
-        try {
-            const dataStr = localStorage.getItem(this.STORAGE_KEY);
-            if (!dataStr) return null;
-
-            const sessionData = JSON.parse(dataStr);
-            if (!sessionData || typeof sessionData !== 'object') {
-                this.clearSession();
-                return null;
-            }
-
-            // Check 24-hour expiration
-            if (Date.now() - sessionData.timestamp > this.EXPIRATION_MS) {
-                this.clearSession();
-                return null;
-            }
-
-            if (!Array.isArray(sessionData.messages)) {
-                this.clearSession();
-                return null;
-            }
-
-            return sessionData;
-        } catch (error) {
-            console.warn('ChatStateManager: Corrupted session data detected. Resetting chat state.', error);
-            this.clearSession();
-            return null;
-        }
-    }
-
-    static clearSession() {
-        try {
-            localStorage.removeItem(this.STORAGE_KEY);
-        } catch (error) {
-            console.warn('ChatStateManager: Unable to clear localStorage item.', error);
-        }
-    }
+/**
+ * Sanitizes input text against Cross-Site Scripting (XSS) attacks by converting special characters to HTML entities.
+ * Neutralizes <script>, <iframe>, javascript: protocols, and HTML entity vectors.
+ * @param {string} str - Raw input string
+ * @returns {string} Sanitized string safe for DOM rendering
+ */
+function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .replace(/\//g, '&#x2F;');
 }
 
-class ChatbotDemo {
-    constructor(containerId) {
-        this.container = document.getElementById(containerId);
-        this.messagesContainer = document.getElementById('chatbotMessages');
-        this.input = document.getElementById('chatbotInput');
-        this.sendButton = document.getElementById('chatbotSend');
-        this.quickReplies = document.getElementById('quickReplies');
+const securityTestVectors = [
+    { payload: '<script>alert("XSS")</script>', description: 'Script tag injection' },
+    { payload: '<iframe src="javascript:alert(1)"></iframe>', description: 'Iframe javascript URI' },
+    { payload: '<img src=x onerror=alert(1)>', description: 'Image onerror handler' },
+    { payload: 'javascript:alert(document.cookie)', description: 'Javascript URI scheme' },
+    { payload: '<body onload=alert(1)>', description: 'Body onload trigger' },
+    { payload: '"/><script>alert(1)</script>', description: 'Attribute breakout XSS' }
+];
 
-        this.messages = [];
-        this.activeTopic = 'default';
+if (typeof globalThis !== 'undefined') {
+    globalThis.escapeHTML = escapeHTML;
+    globalThis.securityTestVectors = securityTestVectors;
+}
 
-        this.responses = {
-            'What services do you offer?': 'We offer AI-powered chatbots that can handle customer support, lead generation, appointment booking, and more! Our chatbots work 24/7 to help grow your business.',
-            'How much does it cost?': 'Our plans start at just ₹799/month for small businesses. We also offer Pro (₹1999/month) and Enterprise (₹2999/month) plans. All include a free trial!',
-            'Can I get a demo?': 'Absolutely! You\'re already experiencing our demo right now! 😊 For a personalized demo of how our chatbot would work for YOUR business, just fill out our contact form below.',
-            'How does it work?': 'It\'s simple! 1) Tell us about your business 2) We build a custom AI chatbot 3) You launch and start seeing results. Most clients are up and running within 48 hours!',
-            'What industries do you serve?': 'We work with restaurants, fitness centers, retail stores, healthcare practices, real estate agencies, and many more! Our AI adapts to any industry.',
-            'Is it easy to setup?': 'Yes! Setup takes just minutes with our plug-and-play integration. No technical skills required - we handle everything for you.',
-            'pricing': 'Our pricing is designed to fit businesses of all sizes! Starter (₹799/mo), Pro (₹1999/mo), and Enterprise (₹2999/mo). All plans include 24/7 support and a money-back guarantee.',
-            'demo': 'You\'re chatting with our AI right now! Pretty cool, right? 🚀 This is just a taste of what our chatbots can do for your business.',
-            'hello': 'Hello there! 👋 Welcome to BotBazzar! I\'m here to show you how our AI chatbots can transform your business. What would you like to know?',
-            'hi': 'Hi! Great to meet you! I\'m your AI assistant demo. I can tell you all about our chatbot solutions. What\'s your biggest customer service challenge?',
-            'help': 'I\'m here to help! You can ask me about:\n• Our services and features\n• Pricing and plans\n• How our chatbots work\n• Getting a personalized demo\n\nWhat interests you most?',
-            'support': 'Our AI chatbots provide 24/7 customer support, answering FAQs, booking appointments, and more. They\'re like having a full support team without the overhead!',
-            'contact': ' You can reach our human team anytime by clicking the "Get Free Demo" button above or the "Get Started" button. We\'d love to chat about how we can help your business!',
+// Form validation helpers
+const ValidationHelpers = {
+    isValidEmail: (email) => {
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
+    },
+    
+    isValidName: (name) => {
+        return name.length >= 2 && /^[a-zA-Z\s]+$/.test(name);
+    },
+    
+    isValidPhone: (phone) => {
+        const re = /^\+?[\d\s\-\(\)]+$/;
+        return re.test(phone) && phone.replace(/\D/g, '').length >= 10;
+    },
+    
+    sanitizeInput: (input) => {
+        if (typeof input !== 'string') return '';
+        return input.trim().replace(/[<>]/g, '');
+    }
+};
+
+class ContactForm {
+    constructor(formId) {
+        this.form = document.getElementById(formId);
+        if (!this.form) return;
+        
+        this.fields = {
+            name: {
+                element: document.getElementById('name'),
+                errorElement: document.getElementById('nameError'),
+                value: '',
+                isValid: false
+            },
+            email: {
+                element: document.getElementById('email'),
+                errorElement: document.getElementById('emailError'),
+                value: '',
+                isValid: false
+            },
+            business: {
+                element: document.getElementById('business'),
+                errorElement: document.getElementById('businessError'),
+                value: '',
+                isValid: false
+            },
+            message: {
+                element: document.getElementById('message'),
+                errorElement: document.getElementById('messageError'),
+                value: '',
+                isValid: false
+            }
         };
-
-        this.fallbackResponses = [
-            'That\'s a great question! Our AI chatbots can definitely help with that. Would you like to schedule a personalized demo to discuss your specific needs?',
-            'I\'d love to tell you more about that! Our team specializes in creating custom solutions. Click "Get Free Demo" above to speak with a human expert!',
-            'Interesting! Our AI learns from conversations like this to better serve your customers. Want to see how this could work for your business?',
-            'Great point! That\'s exactly the kind of thing our chatbots excel at. Ready to see how we can help your specific business? Let\'s chat!'
-        ];
-
-        this.quickReplySuggestions = {
-            'default': ['Tell me about Pricing', 'Book a Demo', 'What services do you offer?'],
-            'services': ['Tell me about Pricing', 'Book a Demo', 'How does it work?'],
-            'pricing': ['Book a Demo', 'What industries do you serve?', 'Is it easy to setup?'],
-            'demo': ['Tell me about Pricing', 'How does it work?', 'What services do you offer?'],
-            'work': ['Is it easy to setup?', 'Book a Demo', 'Tell me about Pricing'],
-            'industries': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo'],
-            'setup': ['Book a Demo', 'Tell me about Pricing', 'What services do you offer?'],
-            'support': ['What services do you offer?', 'Tell me about Pricing', 'Book a Demo']
-        };
-
+        
+        this.isSubmitting = false;
         this.init();
     }
-
+    
     init() {
-        if (!this.container) return;
-
-        this.setupAutoScroll();
         this.bindEvents();
-
-        const session = ChatStateManager.loadSession();
-        if (session && session.messages && session.messages.length > 0) {
-            if (this.messagesContainer) {
-                this.messagesContainer.innerHTML = '';
-            }
-            this.activeTopic = session.topic || 'default';
-            this.messages = [];
-            session.messages.forEach(msg => {
-                this.addMessage(msg.sender, msg.text, msg.time, false);
-                this.messages.push(msg);
-            });
-            const suggestions = this.quickReplySuggestions[this.activeTopic] || this.quickReplySuggestions['default'];
-            this.renderQuickReplies(suggestions);
-            this.scrollToBottom();
-        } else {
-            if (this.messagesContainer) {
-                this.messagesContainer.innerHTML = '';
-            }
-            this.showTypingIndicator();
-
-            setTimeout(() => {
-                this.hideTypingIndicator();
-                this.addMessage('bot', 'Hello! I\'m your AI assistant. How can I help you today?');
-                this.renderQuickReplies(this.quickReplySuggestions['default']);
-                this.scrollToBottom();
-            }, 1500);
-        }
     }
-
+    
     bindEvents() {
-        // Send button click
-        if (this.sendButton) {
-            this.sendButton.addEventListener('click', () => this.handleSendMessage());
-        }
-
-        // Enter key press
-        if (this.input) {
-            this.input.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    this.handleSendMessage();
-                }
-            });
-
-            // Auto-resize input
-            this.input.addEventListener('input', () => {
-                this.input.style.height = 'auto';
-                this.input.style.height = this.input.scrollHeight + 'px';
-            });
-        }
-
-        // Quick reply buttons
-        if (this.quickReplies) {
-            this.quickReplies.addEventListener('click', (e) => {
-                const button = e.target.closest('.quick-reply');
-                if (button && !button.disabled) {
-                    const message = button.getAttribute('data-message') || button.textContent;
-                    this.input.value = message;
-                    this.handleSendMessage();
-                }
-            });
-        }
-    }
-
-    handleSendMessage() {
-        const message = this.input.value.trim();
-        if (message) {
-            this.sendMessage(message);
-            this.input.value = '';
-            this.input.style.height = 'auto';
-        }
-    }
-
-    sendMessage(message) {
-        // Add user message
-        this.addMessage('user', message);
-
-        // Disable quick replies while processing
-        this.disableQuickReplies();
-
-        // Show typing indicator
-        this.showTypingIndicator();
-
-        // Simulate typing delay
-        setTimeout(() => {
-            this.hideTypingIndicator();
-            this.generateResponse(message);
-        }, 1000 + Math.random() * 1000);
-    }
-
-    generateResponse(userMessage) {
-        const lowerMessage = userMessage.toLowerCase();
-        let response = null;
-        let topic = 'default';
-
-        // Check for exact matches first
-        for (const [key, value] of Object.entries(this.responses)) {
-            if (lowerMessage.includes(key.toLowerCase())) {
-                response = value;
-                break;
-            }
-        }
-
-        // Check for partial matches
-        if (!response) {
-            const keywords = {
-                'price': this.responses['pricing'],
-                'cost': this.responses['pricing'],
-                'expensive': this.responses['pricing'],
-                'money': this.responses['pricing'],
-                'plan': this.responses['pricing'],
-                'demo': this.responses['demo'],
-                'try': this.responses['demo'],
-                'test': this.responses['demo'],
-                'service': this.responses['What services do you offer?'],
-                'feature': this.responses['What services do you offer?'],
-                'work': this.responses['How does it work?'],
-                'setup': this.responses['Is it easy to setup?'],
-                'install': this.responses['Is it easy to setup?'],
-                'industry': this.responses['What industries do you serve?'],
-                'business': this.responses['What industries do you serve?'],
-                'contact': this.responses['contact'],
-                'support': this.responses['support'],
-                'help': this.responses['help']
-            };
-
-            for (const [keyword, responseText] of Object.entries(keywords)) {
-                if (lowerMessage.includes(keyword)) {
-                    response = responseText;
-                    break;
-                }
-            }
-        }
-
-        // Determine context topic for dynamic suggestion chips
-        if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('pricing') || lowerMessage.includes('plan')) {
-            topic = 'pricing';
-        } else if (lowerMessage.includes('demo')) {
-            topic = 'demo';
-        } else if (lowerMessage.includes('service') || lowerMessage.includes('feature')) {
-            topic = 'services';
-        } else if (lowerMessage.includes('work')) {
-            topic = 'work';
-        } else if (lowerMessage.includes('setup') || lowerMessage.includes('install')) {
-            topic = 'setup';
-        } else if (lowerMessage.includes('industry') || lowerMessage.includes('business')) {
-            topic = 'industries';
-        } else if (lowerMessage.includes('support') || lowerMessage.includes('help') || lowerMessage.includes('contact')) {
-            topic = 'support';
-        }
-
-        this.activeTopic = topic;
-
-        // Use fallback response if no match found
-        if (!response) {
-            response = this.fallbackResponses[Math.floor(Math.random() * this.fallbackResponses.length)];
-        }
-
-        this.addMessage('bot', response);
-        const suggestions = this.quickReplySuggestions[topic] || this.quickReplySuggestions['default'];
-        this.renderQuickReplies(suggestions);
-        this.scrollToBottom();
-    }
-
-    renderQuickReplies(chips) {
-        if (!this.quickReplies) return;
-        this.quickReplies.innerHTML = '';
-        this.quickReplies.style.display = 'flex';
-
-        chips.forEach(chipText => {
-            const button = document.createElement('button');
-            button.className = 'quick-reply';
-            button.setAttribute('data-message', chipText);
-            button.textContent = chipText;
-            this.quickReplies.appendChild(button);
-        });
-    }
-
-    disableQuickReplies() {
-        if (!this.quickReplies) return;
-        const buttons = this.quickReplies.querySelectorAll('.quick-reply');
-        buttons.forEach(btn => {
-            btn.disabled = true;
-        });
-    }
-
-    addMessage(sender, text, timestampOverride = null, saveToStorage = true) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${sender}-message`;
-
-        const avatar = document.createElement('div');
-        avatar.className = 'message-avatar';
-        avatar.innerHTML = sender === 'bot' ? '<i data-lucide="bot"></i>' : '<i data-lucide="user"></i>';
-
-        const content = document.createElement('div');
-        content.className = 'message-content';
-
-        const messageParagraph = document.createElement('p');
-        messageParagraph.textContent = text;
-
-        const timeText = timestampOverride || new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
-        const timestamp = document.createElement('span');
-        timestamp.className = 'message-time';
-        timestamp.textContent = timeText;
-
-        content.appendChild(messageParagraph);
-        content.appendChild(timestamp);
-
-        messageDiv.appendChild(avatar);
-        messageDiv.appendChild(content);
-
-        // Add animation class
-        messageDiv.classList.add('message-enter');
-
-        if (this.messagesContainer) {
-            this.messagesContainer.appendChild(messageDiv);
-
-            // Re-initialize Lucide icons for new message
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-
-            // Scroll to bottom immediately as message renders
-            this.scrollToBottom();
-
-            // Auto-scroll when message finishes rendering / animation completes
-            setTimeout(() => {
-                messageDiv.classList.remove('message-enter');
-                this.scrollToBottom();
-            }, 300);
-        }
-
-        if (saveToStorage) {
-            this.messages.push({ sender, text, time: timeText });
-            ChatStateManager.saveSession(this.messages, this.activeTopic);
-        }
-    }
-
-    showTypingIndicator() {
-        this.disableQuickReplies();
-
-        const existingIndicator = document.querySelector('.typing-message');
-        if (existingIndicator) return;
-
-        const typingDiv = document.createElement('div');
-        typingDiv.className = 'message bot-message typing-message message-enter';
-
-        const avatar = document.createElement('div');
-        avatar.className = 'message-avatar';
-        avatar.innerHTML = '<i data-lucide="bot"></i>';
-
-        const content = document.createElement('div');
-        content.className = 'message-content';
-
-        const typingIndicator = document.createElement('div');
-        typingIndicator.className = 'typing-indicator';
-        typingIndicator.innerHTML = '<span></span><span></span><span></span>';
-
-        content.appendChild(typingIndicator);
-        typingDiv.appendChild(avatar);
-        typingDiv.appendChild(content);
-
-        if (this.messagesContainer) {
-            this.messagesContainer.appendChild(typingDiv);
-
-            // Initialize icons
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-
-            // Scroll to bottom immediately
-            this.scrollToBottom();
-
-            // Auto-scroll when typing indicator finishes rendering / animation completes
-            setTimeout(() => {
-                typingDiv.classList.remove('message-enter');
-                this.scrollToBottom();
-            }, 300);
-        }
-    }
-
-    hideTypingIndicator() {
-        const typingIndicator = document.querySelector('.typing-message');
-        if (typingIndicator) {
-            typingIndicator.remove();
-        }
-    }
-
-    scrollToBottom() {
-        if (!this.messagesContainer) return;
-
-        // Immediate scroll
-        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-
-        // Smooth scroll if supported
-        if (typeof this.messagesContainer.scrollTo === 'function') {
-            try {
-                this.messagesContainer.scrollTo({
-                    top: this.messagesContainer.scrollHeight,
-                    behavior: 'smooth'
+        // Form submission
+        this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+        
+        // Real-time validation
+        Object.keys(this.fields).forEach(fieldName => {
+            const field = this.fields[fieldName];
+            if (field.element) {
+                field.element.addEventListener('blur', () => this.validateField(fieldName));
+                field.element.addEventListener('input', () => {
+                    if (field.errorElement && field.errorElement.textContent) {
+                        this.clearFieldError(fieldName);
+                    }
                 });
-            } catch (e) {
-                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+        });
+    }
+    
+    validateField(fieldName) {
+        const field = this.fields[fieldName];
+        if (!field.element) return false;
+        
+        const rawValue = field.element.value;
+        const value = ValidationHelpers.sanitizeInput(rawValue);
+        field.value = value;
+        
+        let isValid = false;
+        let errorMessage = '';
+        
+        switch (fieldName) {
+            case 'name':
+                isValid = ValidationHelpers.isValidName(value);
+                errorMessage = isValid ? '' : 'Please enter a valid name (at least 2 letters)';
+                break;
+                
+            case 'email':
+                isValid = ValidationHelpers.isValidEmail(value);
+                errorMessage = isValid ? '' : 'Please enter a valid email address';
+                break;
+                
+            case 'business':
+                isValid = value !== '';
+                errorMessage = isValid ? '' : 'Please select your business type';
+                break;
+                
+            case 'message':
+                isValid = value.length >= 10;
+                errorMessage = isValid ? '' : 'Please provide more details (minimum 10 characters)';
+                break;
+        }
+        
+        field.isValid = isValid;
+        this.updateFieldUI(fieldName, isValid, errorMessage);
+        
+        return isValid;
+    }
+    
+    updateFieldUI(fieldName, isValid, errorMessage) {
+        const field = this.fields[fieldName];
+        const formGroup = field.element ? field.element.parentElement : null;
+        if (!formGroup) return;
+        
+        formGroup.classList.remove('error', 'success');
+        
+        if (field.value) {
+            formGroup.classList.add(isValid ? 'success' : 'error');
+            
+            if (field.errorElement) {
+                field.errorElement.textContent = '';
+                if (!isValid) {
+                    field.errorElement.appendChild(document.createTextNode(errorMessage));
+                }
             }
         }
-
-        // Ensure scroll reaches the exact bottom once rendering and layout reflow finish
-        requestAnimationFrame(() => {
-            if (this.messagesContainer) {
-                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    }
+    
+    clearFieldError(fieldName) {
+        const field = this.fields[fieldName];
+        const formGroup = field.element ? field.element.parentElement : null;
+        
+        if (formGroup && formGroup.classList.contains('error')) {
+            formGroup.classList.remove('error');
+            if (field.errorElement) {
+                field.errorElement.textContent = '';
+            }
+        }
+    }
+    
+    validateForm() {
+        let isFormValid = true;
+        
+        Object.keys(this.fields).forEach(fieldName => {
+            if (!this.validateField(fieldName)) {
+                isFormValid = false;
             }
         });
+        
+        return isFormValid;
     }
 
-    setupAutoScroll() {
-        if (!this.messagesContainer || typeof MutationObserver === 'undefined') return;
+    async handleSubmit(e) {
+        e.preventDefault();
+        
+        if (this.isSubmitting) return;
+        
+        if (!this.validateForm()) {
+            this.showFormError('Please correct the errors above');
+            this.shakeForm();
+            return;
+        }
+        
+        this.isSubmitting = true;
+        this.showLoadingState();
 
-        const observer = new MutationObserver(() => {
-            this.scrollToBottom();
+        try {
+            if (typeof emailjs !== 'undefined') {
+                // Send Welcome Email to Customer
+                await emailjs.send("service_xjvwrpe", "template_smrpqqs", {
+                    name: this.fields.name.value,
+                    email: this.fields.email.value,
+                    business: this.fields.business.value,
+                    message: this.fields.message.value
+                });
+
+                // Send Notification Email to Admin
+                await emailjs.send("service_xjvwrpe", "template_iljigj5", {
+                    name: this.fields.name.value,
+                    email: this.fields.email.value,
+                    business: this.fields.business.value,
+                    message: this.fields.message.value
+                });
+            }
+
+            this.showToast("Message sent successfully!", "success");
+            this.showSuccess();
+
+        } catch (error) {
+            console.error("EmailJS Error:", error.text || error.message || error);
+            this.showFormError("Something went wrong. Please try again.");
+        } finally {
+            this.isSubmitting = false;
+            this.hideLoadingState();
+        }
+    }
+
+    showLoadingState() {
+        const submitBtn = document.getElementById('submitBtn');
+        if (submitBtn) {
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+        }
+    }
+    
+    hideLoadingState() {
+        const submitBtn = document.getElementById('submitBtn');
+        if (submitBtn) {
+            submitBtn.classList.remove('loading');
+            submitBtn.disabled = false;
+        }
+    }
+    
+    showFormError(message) {
+        console.error('Form Error:', message);
+        this.showToast(message, 'error');
+    }
+    
+    showSuccess() {
+        const modal = document.getElementById('successModal');
+        if (modal) {
+            modal.classList.add('show');
+            
+            const closeBtn = document.getElementById('modalClose');
+            const handleClose = () => {
+                modal.classList.remove('show');
+                this.resetForm();
+                if (closeBtn) closeBtn.removeEventListener('click', handleClose);
+                modal.removeEventListener('click', handleModalClick);
+            };
+            
+            const handleModalClick = (e) => {
+                if (e.target === modal) {
+                    handleClose();
+                }
+            };
+            
+            if (closeBtn) closeBtn.addEventListener('click', handleClose);
+            modal.addEventListener('click', handleModalClick);
+        }
+    }
+    
+    resetForm() {
+        if (this.form) this.form.reset();
+        
+        Object.keys(this.fields).forEach(fieldName => {
+            const field = this.fields[fieldName];
+            if (field.element && field.element.parentElement) {
+                field.element.parentElement.classList.remove('error', 'success');
+            }
+            if (field.errorElement) {
+                field.errorElement.textContent = '';
+            }
+            field.value = '';
+            field.isValid = false;
         });
-
-        observer.observe(this.messagesContainer, {
-            childList: true,
-            subtree: true
+    }
+    
+    shakeForm() {
+        if (this.form) {
+            this.form.classList.add('animate-shake');
+            setTimeout(() => {
+                this.form.classList.remove('animate-shake');
+            }, 600);
+        }
+    }
+    
+    showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.appendChild(document.createTextNode(message));
+        
+        Object.assign(toast.style, {
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            backgroundColor: type === 'error' ? '#EF4444' : '#10B981',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            zIndex: '10000',
+            transform: 'translateX(100%)',
+            transition: 'transform 0.3s ease'
         });
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.transform = 'translateX(0)';
+        }, 100);
+        
+        setTimeout(() => {
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }, 5000);
     }
 }
 
-// Initialize chatbot when DOM is loaded
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-        new ChatbotDemo('chatbotWindow');
-    });
-} else {
-    new ChatbotDemo('chatbotWindow');
-}
+// Initialize form when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    new ContactForm('contactForm');
+});
 
-// Add CSS for message animations and disabled quick reply states
-const style = document.createElement('style');
-style.textContent = `
-.message-enter {
-    opacity: 0;
-    transform: translateY(20px);
-    animation: messageEnter 0.3s ease-out forwards;
+// Export for modular usage
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { ContactForm, ValidationHelpers };
 }
-
-@keyframes messageEnter {
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.quick-reply:disabled,
-.quick-reply[disabled] {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
-}
-
-.typing-indicator {
-    display: flex;
-    gap: 4px;
-    padding: 12px 16px;
-    background: var(--light-gray);
-    border-radius: var(--border-radius-lg);
-    width: fit-content;
-}
-
-.typing-indicator span {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--medium-gray);
-    animation: typing 1.4s infinite ease-in-out;
-}
-
-.typing-indicator span:nth-child(2) {
-    animation-delay: 0.2s;
-}
-
-.typing-indicator span:nth-child(3) {
-    animation-delay: 0.4s;
-}
-
-@keyframes typing {
-    0%, 60%, 100% {
-        transform: translateY(0);
-        opacity: 0.4;
-    }
-    30% {
-        transform: translateY(-10px);
-        opacity: 1;
-    }
-}
-`;
-document.head.appendChild(style);
