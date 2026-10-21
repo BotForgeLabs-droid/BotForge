@@ -304,6 +304,98 @@
         </div>
     </section>
 
+    <!-- Standalone Website Feedback Section -->
+    <section class="feedback-section" id="feedback">
+        <div class="container">
+            <div class="section-header" data-aos="fade-up">
+                <h2 class="section-title">Help Us Improve BotForge</h2>
+                <p class="section-subtitle">
+                    Share your experience with our chatbot demo and platform to help us improve.
+                </p>
+            </div>
+
+            <div class="feedback-container" data-aos="fade-up" data-aos-delay="100">
+                <div class="feedback-card" id="feedbackCard">
+                    <!-- Form State -->
+                    <form id="feedbackForm" class="feedback-form" novalidate>
+                        <div class="feedback-rating-group">
+                            <label class="feedback-label" id="ratingLabel">
+                                How would you rate your experience? <span class="required-indicator" aria-hidden="true">*</span>
+                            </label>
+                            
+                            <div class="rating-stars-wrapper" role="radiogroup" aria-labelledby="ratingLabel" id="ratingStars">
+                                <button type="button" class="rating-star-btn" data-rating="1" role="radio" aria-checked="false" aria-label="1 star - Poor" title="1 star - Poor">
+                                    <svg class="star-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                    </svg>
+                                </button>
+                                <button type="button" class="rating-star-btn" data-rating="2" role="radio" aria-checked="false" aria-label="2 stars - Fair" title="2 stars - Fair">
+                                    <svg class="star-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                    </svg>
+                                </button>
+                                <button type="button" class="rating-star-btn" data-rating="3" role="radio" aria-checked="false" aria-label="3 stars - Good" title="3 stars - Good">
+                                    <svg class="star-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                    </svg>
+                                </button>
+                                <button type="button" class="rating-star-btn" data-rating="4" role="radio" aria-checked="false" aria-label="4 stars - Very Good" title="4 stars - Very Good">
+                                    <svg class="star-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                    </svg>
+                                </button>
+                                <button type="button" class="rating-star-btn" data-rating="5" role="radio" aria-checked="false" aria-label="5 stars - Excellent" title="5 stars - Excellent">
+                                    <svg class="star-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="rating-text-feedback" id="ratingTextFeedback" aria-live="polite">
+                                Select a rating
+                            </div>
+                            <span class="error-message feedback-error" id="ratingError" role="alert" style="display: none;">
+                                Please select a star rating before submitting your feedback.
+                            </span>
+                        </div>
+
+                        <div class="feedback-comment-group">
+                            <label for="feedbackComment" class="feedback-label">
+                                Additional comments <span class="optional-tag">(optional)</span>
+                            </label>
+                            <textarea id="feedbackComment" name="feedbackComment" class="feedback-textarea" rows="4" placeholder="What did you like most, or what could we improve? Let us know..."></textarea>
+                        </div>
+
+                        <div class="feedback-actions">
+                            <button type="submit" id="feedbackSubmitBtn" class="btn btn-primary feedback-submit-btn">
+                                <span class="btn-text">Submit Feedback</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Success State -->
+                    <div id="feedbackSuccessState" class="feedback-success-state" style="display: none;" role="status">
+                        <div class="feedback-success-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="success-check-svg">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            </svg>
+                        </div>
+                        <h3 class="feedback-success-title">Thank You for Your Feedback!</h3>
+                        <p class="feedback-success-msg" id="feedbackSuccessMessage">
+                            Your rating has been successfully recorded. We appreciate your time in helping us improve BotForge!
+                        </p>
+                        <div class="feedback-summary" id="feedbackSummary"></div>
+                        <div class="feedback-success-actions">
+                            <button type="button" id="feedbackEditBtn" class="btn btn-secondary feedback-edit-btn">
+                                Submit Another Response
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Testimonials Section -->
     <section class="testimonials" id="testimonials">
         <div class="container">
@@ -752,6 +844,7 @@
     <script src="scripts/main.js"></script>
     <script src="scripts/chatbot.js"></script>
     <script src="scripts/form.js"></script>
+    <script src="scripts/feedback.js"></script>
     <script src="scripts/animations.js"></script>
 
     <!-- Initialize Lucide Icons -->
