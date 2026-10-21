@@ -21,8 +21,10 @@ interface SaveResult {
 
 interface IFeedbackStorage {
     STORAGE_KEY: string;
+    HISTORY_KEY: string;
     saveFeedback: (data: Partial<StoredFeedback>) => SaveResult;
     loadFeedback: () => StoredFeedback | null;
+    loadHistory: () => StoredFeedback[];
     clearFeedback: () => void;
 }
 
@@ -468,6 +470,40 @@ describe('Standalone Website Feedback & Rating Suite', () => {
             expect(form.style.display).not.toBe('none');
             expect(successState.style.display).toBe('none');
             expect(manager.selectedRating).toBeNull();
+        });
+
+        it('should display both comments together in the review box when multiple submissions occur', () => {
+            const manager = new FeedbackManager('feedbackForm');
+            const commentInput = document.getElementById('feedbackComment') as HTMLTextAreaElement;
+            const summary = document.getElementById('feedbackSummary') as HTMLElement;
+            const editBtn = document.getElementById('feedbackEditBtn') as HTMLButtonElement;
+
+            // First submission
+            manager.setRating(4);
+            commentInput.value = 'First comment: The chatbot answered my pricing questions quickly.';
+            manager.handleSubmit();
+
+            expect(summary.textContent).toContain('First comment');
+
+            // Click submit another
+            editBtn.click();
+            expect(commentInput.value).toBe('');
+
+            // Second submission
+            manager.setRating(5);
+            commentInput.value = 'Second comment: Excellent UI design and animations.';
+            manager.handleSubmit();
+
+            // Verify BOTH comments are displayed together in the review box
+            expect(summary.textContent).toContain('First comment');
+            expect(summary.textContent).toContain('Second comment');
+            expect(summary.textContent).toContain('Your Submissions (2)');
+
+            // Verify loadHistory contains both entries
+            const history = FeedbackStorage.loadHistory();
+            expect(history.length).toBe(2);
+            expect(history[0].comment).toContain('Second comment');
+            expect(history[1].comment).toContain('First comment');
         });
     });
 });

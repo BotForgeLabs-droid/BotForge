@@ -23,6 +23,7 @@ function escapeHTML(str) {
  */
 class FeedbackStorage {
     static STORAGE_KEY = 'botforge_feedback';
+    static HISTORY_KEY = 'botforge_feedback_history';
 
     /**
      * Saves feedback to localStorage.
@@ -60,7 +61,14 @@ class FeedbackStorage {
         };
 
         try {
+            // Save latest entry
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+
+            // Append to history list so all submitted comments are preserved
+            const history = this.loadHistory();
+            history.unshift(data);
+            localStorage.setItem(this.HISTORY_KEY, JSON.stringify(history));
+
             return { success: true, data };
         } catch (error) {
             console.warn('FeedbackStorage: Failed to save feedback to localStorage.', error);
@@ -119,11 +127,35 @@ class FeedbackStorage {
     }
 
     /**
+     * Loads all historical feedback submissions from localStorage.
+     * @returns {Array<Object>} List of feedback entries
+     */
+    static loadHistory() {
+        try {
+            const raw = localStorage.getItem(this.HISTORY_KEY);
+            if (!raw) return [];
+
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+
+            return parsed.filter(item => {
+                if (!item || typeof item !== 'object') return false;
+                const r = Number(item.rating);
+                return Number.isInteger(r) && r >= 1 && r <= 5;
+            });
+        } catch (error) {
+            console.warn('FeedbackStorage: Error reading feedback history.', error);
+            return [];
+        }
+    }
+
+    /**
      * Clears stored feedback from localStorage.
      */
     static clearFeedback() {
         try {
             localStorage.removeItem(this.STORAGE_KEY);
+            localStorage.removeItem(this.HISTORY_KEY);
         } catch (error) {
             console.warn('FeedbackStorage: Unable to clear localStorage item.', error);
         }
@@ -369,34 +401,78 @@ class FeedbackManager {
         if (this.form) {
             this.form.style.display = 'block';
         }
+
+        // Reset form controls for a fresh new review
+        this.selectedRating = null;
+        this.hoveredRating = null;
+        this.starButtons.forEach(btn => {
+            btn.classList.remove('active', 'hovered');
+            btn.setAttribute('aria-checked', 'false');
+        });
+        if (this.ratingText) {
+            this.ratingText.textContent = 'Select a rating';
+            this.ratingText.classList.remove('selected');
+        }
+        if (this.commentInput) {
+            this.commentInput.value = '';
+        }
+        this.clearRatingError();
     }
 
     renderSummary(feedback) {
         if (!this.summaryContainer) return;
 
-        let starsHtml = '<div class="summary-stars" aria-label="' + feedback.rating + ' out of 5 stars">';
-        for (let i = 1; i <= 5; i++) {
-            const filled = i <= feedback.rating;
-            starsHtml += `<span class="summary-star ${filled ? 'filled' : 'empty'}">&#9733;</span>`;
-        }
-        starsHtml += ` <strong class="summary-score">${feedback.rating} / 5</strong></div>`;
+        // Retrieve full submission history so all submitted comments appear together
+        const history = FeedbackStorage.loadHistory();
+        const listToRender = (Array.isArray(history) && history.length > 0) ? history : [feedback];
 
-        let commentHtml = '';
-        if (feedback.comment && feedback.comment.trim()) {
-            commentHtml = `<blockquote class="summary-comment">"${escapeHTML(feedback.comment.trim())}"</blockquote>`;
+        let html = '';
+
+        if (listToRender.length > 1) {
+            html += `<div class="summary-count-badge">Your Submissions (${listToRender.length})</div>`;
         }
 
-        const formattedDate = new Date(feedback.timestamp).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
+        html += '<div class="summary-reviews-list">';
+
+        listToRender.forEach((item, index) => {
+            let starsHtml = `<div class="summary-stars" aria-label="${item.rating} out of 5 stars">`;
+            for (let i = 1; i <= 5; i++) {
+                const filled = i <= item.rating;
+                starsHtml += `<span class="summary-star ${filled ? 'filled' : 'empty'}">&#9733;</span>`;
+            }
+            starsHtml += ` <strong class="summary-score">${item.rating} / 5</strong>`;
+            if (index === 0 && listToRender.length > 1) {
+                starsHtml += ` <span class="latest-tag">Latest</span>`;
+            }
+            starsHtml += `</div>`;
+
+            let commentHtml = '';
+            if (item.comment && item.comment.trim()) {
+                commentHtml = `<blockquote class="summary-comment">"${escapeHTML(item.comment.trim())}"</blockquote>`;
+            } else {
+                commentHtml = `<div class="summary-no-comment"><em>(No comment provided)</em></div>`;
+            }
+
+            const formattedDate = new Date(item.timestamp).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            html += `
+                <div class="summary-review-card ${index === 0 ? 'is-latest' : ''}">
+                    ${starsHtml}
+                    ${commentHtml}
+                    <div class="summary-meta">Submitted on ${formattedDate}</div>
+                </div>
+            `;
         });
 
-        this.summaryContainer.innerHTML = `
-            ${starsHtml}
-            ${commentHtml}
-            <div class="summary-meta">Submitted on ${formattedDate}</div>
-        `;
+        html += '</div>';
+
+        this.summaryContainer.innerHTML = html;
     }
 
     checkExistingFeedback() {
